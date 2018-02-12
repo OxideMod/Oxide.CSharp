@@ -41,8 +41,9 @@ namespace Oxide.Plugins
         };
 
         private static IEnumerable<string> WhitelistedNamespaces => new[] {
-            "System.Diagnostics.Stopwatch", "System.IO.MemoryStream", "System.IO.Stream", "System.IO.BinaryReader", "System.IO.BinaryWriter",
-            "System.Net.Dns.GetHostEntry", "System.Net.Sockets.SocketFlags", "System.Net.IPEndPoint", "System.Security.Cryptography", "System.Threading.Interlocked"
+            "System.Diagnostics.Stopwatch", "System.IO.MemoryStream", "System.IO.Stream", "System.IO.BinaryReader", "System.IO.BinaryWriter", "System.Net.Dns",
+            "System.Net.Dns.GetHostEntry", "System.Net.IPAddress", "System.Net.IPEndPoint", "System.Net.NetworkInformation",
+            "System.Net.Sockets.SocketFlags", "System.Security.Cryptography", "System.Threading.Interlocked"
         };
 
         public CompiledAssembly(string name, CompilablePlugin[] plugins, byte[] rawAssembly, float duration)
