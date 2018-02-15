@@ -147,7 +147,7 @@ namespace Oxide.Plugins
                 if (remoteHash != localHash)
                 {
                     Interface.Oxide.LogInfo($"Local hash did not match remote hash for {FileName}, attempting download again");
-                    CheckCompilerBinary();
+                    UpdateCheck();
                     downloadRetries++;
                     return;
                 }
