@@ -38,11 +38,6 @@ namespace Oxide.Plugins
         /// </summary>
         public override VersionNumber Version => AssemblyVersion;
 
-        /// <summary>
-        /// Gets the branch of this extension
-        /// </summary>
-        public override string Branch => ThisAssembly.Git.Branch;
-
         public FSWatcher Watcher { get; private set; }
 
         // The .cs plugin loader
