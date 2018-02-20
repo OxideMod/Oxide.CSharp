@@ -28,8 +28,9 @@ namespace Oxide.Plugins
 
         private string includePath;
         private string[] extensionNames;
-        private string gameExtensionName;
         private string gameExtensionNamespace;
+        private readonly string gameExtensionName;
+        private readonly string gameExtensionBranch;
 
         internal Compilation(int id, Action<Compilation> callback, CompilablePlugin[] plugins)
         {
@@ -50,6 +51,7 @@ namespace Oxide.Plugins
             var gameExtension = Interface.Oxide.GetAllExtensions().SingleOrDefault(ext => ext.IsGameExtension);
             gameExtensionName = gameExtension?.Name.ToUpper();
             gameExtensionNamespace = gameExtension?.GetType().Namespace;
+            gameExtensionBranch = gameExtension?.Branch.ToUpper();
         }
 
         internal void Started()
