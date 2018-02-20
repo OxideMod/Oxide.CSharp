@@ -381,13 +381,11 @@ namespace Oxide.Plugins
 
                             if (!string.IsNullOrEmpty(gameExtensionName))
                             {
-                                if (!string.IsNullOrEmpty(gameExtensionBranch) && gameExtensionBranch != "master")
+                                lines.Insert(0, $"#define {gameExtensionName}");
+
+                                if (!string.IsNullOrEmpty(gameExtensionBranch) && gameExtensionBranch != "public")
                                 {
                                     lines.Insert(0, $"#define {gameExtensionName}{gameExtensionBranch}");
-                                }
-                                else
-                                {
-                                    lines.Insert(0, $"#define {gameExtensionName}");
                                 }
                             }
 
