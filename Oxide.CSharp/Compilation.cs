@@ -376,6 +376,19 @@ namespace Oxide.Plugins
                             var lines = new List<string>();
                             while (!reader.EndOfStream) lines.Add(reader.ReadLine());
                             if (!string.IsNullOrEmpty(gameExtensionName)) lines.Insert(0, $"#define {gameExtensionName}");
+
+                            if (!string.IsNullOrEmpty(gameExtensionName))
+                            {
+                                if (!string.IsNullOrEmpty(gameExtensionBranch) && gameExtensionBranch != "master")
+                                {
+                                    lines.Insert(0, $"#define {gameExtensionName}{gameExtensionBranch}");
+                                }
+                                else
+                                {
+                                    lines.Insert(0, $"#define {gameExtensionName}");
+                                }
+                            }
+
                             plugin.ScriptLines = lines.ToArray();
                             plugin.ScriptEncoding = reader.CurrentEncoding;
                         }
