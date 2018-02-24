@@ -166,7 +166,7 @@ namespace Oxide.Plugins
             try
             {
                 var filePath = Path.Combine(Interface.Oxide.RootDirectory, FileName);
-                var request = (HttpWebRequest)WebRequest.Create($"https://github.com/OxideMod/CSharpCompiler/releases/download/latest/{FileName}");
+                var request = (HttpWebRequest)WebRequest.Create($"https://umod-01.nyc3.digitaloceanspaces.com/{FileName}");
                 var response = (HttpWebResponse)request.GetResponse();
                 var statusCode = (int)response.StatusCode;
                 if (statusCode != 200) Interface.Oxide.LogWarning($"Status code from download location was not okay (code {statusCode})");
