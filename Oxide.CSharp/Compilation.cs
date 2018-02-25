@@ -51,7 +51,7 @@ namespace Oxide.Plugins
             var gameExtension = Interface.Oxide.GetAllExtensions().SingleOrDefault(ext => ext.IsGameExtension);
             gameExtensionName = gameExtension?.Name.ToUpper();
             gameExtensionNamespace = gameExtension?.GetType().Namespace;
-            gameExtensionBranch = gameExtension?.Branch.ToUpper();
+            gameExtensionBranch = gameExtension?.Branch?.ToUpper();
         }
 
         internal void Started()
