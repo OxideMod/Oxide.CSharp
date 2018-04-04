@@ -1,9 +1,9 @@
-﻿extern alias Oxide;
+﻿extern alias References;
 
 using Oxide.Core.Plugins;
-using Oxide::Mono.Cecil;
-using Oxide::Mono.Cecil.Cil;
-using Oxide::Mono.Cecil.Rocks;
+using References::Mono.Cecil;
+using References::Mono.Cecil.Cil;
+using References::Mono.Cecil.Rocks;
 using System;
 using System.Collections.Generic;
 using System.IO;

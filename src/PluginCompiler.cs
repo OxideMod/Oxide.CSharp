@@ -1,9 +1,9 @@
-﻿extern alias Oxide;
+﻿extern alias References;
 
 using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
-using Oxide::Mono.Unix.Native;
+using References::Mono.Unix.Native;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

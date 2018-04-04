@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27004.2008
 MinimumVisualStudioVersion = 15.0
-Project("{73BB4989-CA7F-4148-8687-18760A25BC5E}") = "Oxide.CSharp", "Oxide.CSharp\Oxide.CSharp.csproj", "{9103D682-D1AA-4A95-A499-896F551AAA62}"
+Project("{73BB4989-CA7F-4148-8687-18760A25BC5E}") = "Oxide.CSharp", "src\Oxide.CSharp.csproj", "{9103D682-D1AA-4A95-A499-896F551AAA62}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
