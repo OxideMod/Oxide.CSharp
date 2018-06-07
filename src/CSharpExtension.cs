@@ -49,8 +49,12 @@ namespace Oxide.Plugins
         /// <param name="manager"></param>
         public CSharpExtension(ExtensionManager manager) : base(manager)
         {
+            Cleanup.Add(Path.Combine(Interface.Oxide.RootDirectory, "CSharpCompiler.exe"));
+
             if (Environment.OSVersion.Platform == PlatformID.Unix)
             {
+                Cleanup.Add(Path.Combine(Interface.Oxide.RootDirectory, "CSharpCompiler.x86"));
+                Cleanup.Add(Path.Combine(Interface.Oxide.RootDirectory, "CSharpCompiler.x86_x64"));
                 Cleanup.Add(Path.Combine(Interface.Oxide.ExtensionDirectory, "Mono.Posix.dll.config"));
 
                 var extDir = Interface.Oxide.ExtensionDirectory;

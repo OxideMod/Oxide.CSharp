@@ -32,6 +32,7 @@ namespace Oxide.Plugins
             BinaryPath = null;
             var rootDirectory = Interface.Oxide.RootDirectory;
             var binaryPath = Path.Combine(rootDirectory, FileName);
+
             if (File.Exists(binaryPath))
             {
                 BinaryPath = binaryPath;
@@ -43,14 +44,14 @@ namespace Oxide.Plugins
                 case PlatformID.Win32NT:
                 case PlatformID.Win32S:
                 case PlatformID.Win32Windows:
-                    FileName = "CSharpCompiler.exe";
+                    FileName = "Compiler.exe";
                     binaryPath = Path.Combine(rootDirectory, FileName);
                     UpdateCheck(); // TODO: Only check once on server startup
                     break;
 
                 case PlatformID.Unix:
                 case PlatformID.MacOSX:
-                    FileName = $"CSharpCompiler.{(IntPtr.Size != 8 ? "x86" : "x86_x64")}";
+                    FileName = $"Compiler.{(IntPtr.Size != 8 ? "x86" : "x86_x64")}";
                     binaryPath = Path.Combine(rootDirectory, FileName);
                     UpdateCheck(); // TODO: Only check once on server startup
                     try
@@ -139,7 +140,7 @@ namespace Oxide.Plugins
 
                 if (downloadRetries >= 3)
                 {
-                    Interface.Oxide.LogInfo($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/CSharpCompiler/releases/download/latest/{FileName}");
+                    Interface.Oxide.LogInfo($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Compiler/releases/download/latest/{FileName}");
                     return;
                 }
 
@@ -156,7 +157,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/CSharpCompiler/releases/download/latest/{FileName}");
+                Interface.Oxide.LogError($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Compiler/releases/download/latest/{FileName}");
                 Interface.Oxide.LogError(ex.Message);
             }
         }
@@ -392,15 +393,17 @@ namespace Oxide.Plugins
                 };
                 switch (Environment.OSVersion.Platform)
                 {
+                    case PlatformID.Win32NT:
                     case PlatformID.Win32S:
                     case PlatformID.Win32Windows:
-                    case PlatformID.Win32NT:
-                        process.StartInfo.EnvironmentVariables["PATH"] = $"{Path.Combine(Interface.Oxide.ExtensionDirectory, "x86")}";
+                        string winPath = Environment.GetEnvironmentVariable("PATH");
+                        Environment.SetEnvironmentVariable("PATH", winPath + $";{Path.Combine(Interface.Oxide.ExtensionDirectory, "x86")}");
                         break;
 
                     case PlatformID.Unix:
                     case PlatformID.MacOSX:
-                        process.StartInfo.EnvironmentVariables["LD_LIBRARY_PATH"] = $"{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}";
+                        string unixPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+                        Environment.SetEnvironmentVariable("PATH", unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}");
                         break;
                 }
                 process.Exited += OnProcessExited;
@@ -435,7 +438,7 @@ namespace Oxide.Plugins
                 if (Environment.OSVersion.Platform == PlatformID.Unix)
                     Interface.Oxide.LogWarning("User running server may not have the proper permissions or install is missing files");
                 else
-                    Interface.Oxide.LogWarning("Compiler may have been closed by interference from security software");
+                    Interface.Oxide.LogWarning("Compiler may have been closed by interference from security software or install is missing files");
                 Shutdown();
             });
         }
