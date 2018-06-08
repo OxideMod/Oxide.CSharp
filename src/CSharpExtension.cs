@@ -59,14 +59,22 @@ namespace Oxide.Plugins
                 oldCompiler += ".x86";
                 if (File.Exists(oldCompiler))
                 {
-                    File.Move(oldCompiler, newCompiler + ".x86");
+                    newCompiler += ".x86";
+                    if (!File.Exists(newCompiler))
+                    {
+                        File.Move(oldCompiler, newCompiler);
+                    }
                     Cleanup.Add(oldCompiler);
                 }
 
                 oldCompiler += "_x64";
                 if (File.Exists(oldCompiler))
                 {
-                    File.Move(oldCompiler, newCompiler + ".x86_x64");
+                    newCompiler += "_x64";
+                    if (!File.Exists(newCompiler))
+                    {
+                        File.Move(oldCompiler, newCompiler);
+                    }
                     Cleanup.Add(oldCompiler);
                 }
 
@@ -82,7 +90,11 @@ namespace Oxide.Plugins
                 oldCompiler += ".exe";
                 if (File.Exists(oldCompiler))
                 {
-                    File.Move(oldCompiler, newCompiler + ".exe");
+                    newCompiler += ".exe";
+                    if (!File.Exists(newCompiler))
+                    {
+                        File.Move(oldCompiler, newCompiler);
+                    }
                     Cleanup.Add(oldCompiler);
                 }
             }
