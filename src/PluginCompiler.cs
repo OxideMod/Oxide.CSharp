@@ -400,15 +400,15 @@ namespace Oxide.Plugins
                     case PlatformID.Win32S:
                     case PlatformID.Win32Windows:
                         string winPath = Environment.GetEnvironmentVariable("PATH");
+                        process.StartInfo.EnvironmentVariables["PATH"] = Path.Combine(Interface.Oxide.ExtensionDirectory, "x86");
                         Environment.SetEnvironmentVariable("PATH", winPath + $";{Path.Combine(Interface.Oxide.ExtensionDirectory, "x86")}");
-                        process.StartInfo.EnvironmentVariables["PATH"] = winPath + $";{Path.Combine(Interface.Oxide.ExtensionDirectory, "x86")}";
                         break;
 
                     case PlatformID.Unix:
                     case PlatformID.MacOSX:
                         string unixPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
-                        Environment.SetEnvironmentVariable("PATH", unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}");
-                        process.StartInfo.EnvironmentVariables["LD_LIBRARY_PATH"] = unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}";
+                        process.StartInfo.EnvironmentVariables["LD_LIBRARY_PATH"] = Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86");
+                        Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}");
                         break;
                 }
                 process.Exited += OnProcessExited;
