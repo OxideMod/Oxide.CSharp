@@ -11,7 +11,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Threading;
 
@@ -439,10 +441,62 @@ namespace Oxide.Plugins
             Interface.Oxide.NextTick(() =>
             {
                 OnCompilerFailed($"compiler v{CompilerVersion} was closed unexpectedly");
+
                 if (Environment.OSVersion.Platform == PlatformID.Unix)
-                    Interface.Oxide.LogWarning("User running server may not have the proper permissions or install is missing files");
+                {
+                    string envPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+                    string libraryPath = Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86");
+                    if (string.IsNullOrEmpty(envPath) || !envPath.Contains(libraryPath))
+                    {
+                        Interface.Oxide.LogWarning($"LD_LIBRARY_PATH does not container path to compiler dependencies: {libraryPath}");
+                    }
+                    else
+                    {
+                        Interface.Oxide.LogWarning("User running server may not have the proper permissions or install is missing files");
+
+                        Interface.Oxide.LogWarning($"User/group running server: {Environment.UserName}/???");
+                        FileSecurity compilerAccess = File.GetAccessControl(BinaryPath);
+                        IdentityReference compilerOwner = compilerAccess.GetOwner(typeof(NTAccount));
+                        IdentityReference compilerGroup = compilerAccess.GetGroup(typeof(NTAccount));
+                        Interface.Oxide.LogWarning($"Compiler under user/group: {compilerOwner}/{compilerGroup}");
+
+                        string depPath = Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86");
+                        string[] depFiles = { "libmonoboehm-2.0.so.1", "libMonoPosixHelper.so", "mono-2.0.dll" };
+                        foreach (string file in depFiles)
+                        {
+                            string filePath = Path.Combine(depPath, file);
+                            if (!File.Exists(filePath))
+                            {
+                                Interface.Oxide.LogWarning($"{filePath} is missing");
+                            }
+                        }
+                    }
+                }
                 else
-                    Interface.Oxide.LogWarning("Compiler may have been closed by interference from security software or install is missing files");
+                {
+                    string envPath = Environment.GetEnvironmentVariable("PATH");
+                    string libraryPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "x86");
+                    if (string.IsNullOrEmpty(envPath) || !envPath.Contains(libraryPath))
+                    {
+                        Interface.Oxide.LogWarning($"PATH does not container path to compiler dependencies: {libraryPath}");
+                    }
+                    else
+                    {
+                        Interface.Oxide.LogWarning("Compiler may have been closed by interference from security software or install is missing files");
+
+                        string depPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "x86");
+                        string[] depFiles = { "mono-2.0.dll", "msvcp140.dll", "msvcr120.dll" };
+                        foreach (string file in depFiles)
+                        {
+                            string filePath = Path.Combine(depPath, file);
+                            if (!File.Exists(filePath))
+                            {
+                                Interface.Oxide.LogWarning($"{filePath} is missing");
+                            }
+                        }
+                    }
+                }
+
                 Shutdown();
             });
         }
