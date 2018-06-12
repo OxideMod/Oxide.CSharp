@@ -400,7 +400,7 @@ namespace Oxide.Plugins
                     case PlatformID.Win32S:
                     case PlatformID.Win32Windows:
                         string winPath = Environment.GetEnvironmentVariable("PATH");
-                        process.StartInfo.EnvironmentVariables["PATH"] = Path.Combine(Interface.Oxide.ExtensionDirectory, "x86");
+                        //process.StartInfo.EnvironmentVariables["PATH"] = Path.Combine(Interface.Oxide.ExtensionDirectory, "x86"); // Not working
                         Environment.SetEnvironmentVariable("PATH", winPath + $";{Path.Combine(Interface.Oxide.ExtensionDirectory, "x86")}");
                         break;
 
