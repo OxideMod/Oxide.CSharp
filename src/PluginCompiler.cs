@@ -3,6 +3,7 @@
 using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
+using References::Mono.Unix;
 using References::Mono.Unix.Native;
 using System;
 using System.Collections.Generic;
@@ -11,9 +12,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Threading;
 
@@ -454,11 +453,9 @@ namespace Oxide.Plugins
                     {
                         Interface.Oxide.LogWarning("User running server may not have the proper permissions or install is missing files");
 
-                        Interface.Oxide.LogWarning($"User/group running server: {Environment.UserName}/???");
-                        FileSecurity compilerAccess = File.GetAccessControl(BinaryPath);
-                        IdentityReference compilerOwner = compilerAccess.GetOwner(typeof(NTAccount));
-                        IdentityReference compilerGroup = compilerAccess.GetGroup(typeof(NTAccount));
-                        Interface.Oxide.LogWarning($"Compiler under user/group: {compilerOwner}/{compilerGroup}");
+                        Interface.Oxide.LogWarning($"User running server: {Environment.UserName}");
+                        UnixFileInfo compilerFileInfo = new UnixFileInfo(BinaryPath);
+                        Interface.Oxide.LogWarning($"Compiler under user/group: {compilerFileInfo.OwnerUser}/{compilerFileInfo.OwnerGroup}");
 
                         string depPath = Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86");
                         string[] depFiles = { "libmonoboehm-2.0.so.1", "libMonoPosixHelper.so", "mono-2.0.dll" };
