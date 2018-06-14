@@ -193,8 +193,7 @@ namespace Oxide.Plugins
 
         private static void SetCompilerVersion()
         {
-            var version = FileVersionInfo.GetVersionInfo(BinaryPath);
-            CompilerVersion = $"{version.FileMajorPart}.{version.FileMinorPart}.{version.FileBuildPart}.{version.FilePrivatePart}";
+            CompilerVersion = File.Exists(BinaryPath) ? FileVersionInfo.GetVersionInfo(BinaryPath).FileVersion : "Unknown";
             RemoteLogger.SetTag("compiler version", CompilerVersion);
         }
 
@@ -254,7 +253,7 @@ namespace Oxide.Plugins
 
             if (!CheckCompiler())
             {
-                OnCompilerFailed($"compiler v{CompilerVersion} couldn't be started");
+                OnCompilerFailed($"compiler version {CompilerVersion} couldn't be started");
                 return;
             }
 
@@ -282,7 +281,7 @@ namespace Oxide.Plugins
             {
                 Interface.Oxide.NextTick(() =>
                 {
-                    OnCompilerFailed($"compiler v{CompilerVersion} disconnected");
+                    OnCompilerFailed($"compiler version {CompilerVersion} disconnected");
                     DependencyTrace();
                     Shutdown();
                 });
@@ -418,7 +417,7 @@ namespace Oxide.Plugins
             {
                 process?.Dispose();
                 process = null;
-                Interface.Oxide.LogException($"Exception while starting compiler v{CompilerVersion}: ", ex);
+                Interface.Oxide.LogException($"Exception while starting compiler version {CompilerVersion}: ", ex);
                 if (BinaryPath.Contains("'")) Interface.Oxide.LogWarning("Server directory path contains an apostrophe, compiler will not work until path is renamed");
                 else if (Environment.OSVersion.Platform == PlatformID.Unix) Interface.Oxide.LogWarning("Compiler may not be set as executable; chmod +x or 0744/0755 required");
                 if (ex.GetBaseException() != ex) Interface.Oxide.LogException("BaseException: ", ex.GetBaseException());
@@ -439,7 +438,7 @@ namespace Oxide.Plugins
         {
             Interface.Oxide.NextTick(() =>
             {
-                OnCompilerFailed($"compiler v{CompilerVersion} was closed unexpectedly");
+                OnCompilerFailed($"compiler version {CompilerVersion} was closed unexpectedly");
 
                 if (Environment.OSVersion.Platform == PlatformID.Unix)
                 {
