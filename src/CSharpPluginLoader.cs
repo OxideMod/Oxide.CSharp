@@ -12,8 +12,10 @@ namespace Oxide.Plugins
         public static string[] DefaultReferences = { "mscorlib", "Oxide.Core", "Oxide.CSharp", "System", "System.Core", "System.Data" };
         public static HashSet<string> PluginReferences = new HashSet<string>(DefaultReferences);
         public static CSharpPluginLoader Instance;
-        private static Dictionary<string, CompilablePlugin> plugins = new Dictionary<string, CompilablePlugin>();
+
         private static CSharpExtension extension;
+        private static Dictionary<string, CompilablePlugin> plugins = new Dictionary<string, CompilablePlugin>();
+        private static readonly string[] AssemblyBlacklist = { "Newtonsoft.Json", "protobuf-net", "websocket-sharp" };
 
         public static CompilablePlugin GetCompilablePlugin(string directory, string name)
         {
@@ -48,7 +50,11 @@ namespace Oxide.Plugins
                 if (extension == null || !extension.IsCoreExtension && !extension.IsGameExtension) continue;
 
                 var assembly = extension.GetType().Assembly;
-                PluginReferences.Add(assembly.GetName().Name);
+                var assemblyName = assembly.GetName().Name;
+
+                if (AssemblyBlacklist.Contains(assemblyName)) continue;
+
+                PluginReferences.Add(assemblyName);
                 foreach (var reference in assembly.GetReferencedAssemblies())
                     if (reference != null) PluginReferences.Add(reference.Name);
             }
