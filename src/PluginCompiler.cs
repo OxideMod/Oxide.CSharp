@@ -102,8 +102,8 @@ namespace Oxide.Plugins
                     EnableRaisingEvents = true
                 };
                 string unixPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
-                Environment.SetEnvironmentVariable("PATH", unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}");
-                trace.StartInfo.EnvironmentVariables["LD_LIBRARY_PATH"] = unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}";
+                Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", unixPath + $":{Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86")}");
+                trace.StartInfo.EnvironmentVariables["LD_LIBRARY_PATH"] = Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86");
                 trace.ErrorDataReceived += (s, e) => Interface.Oxide.LogError(e.Data.TrimStart());
                 trace.OutputDataReceived += (s, e) => Interface.Oxide.LogError(e.Data.TrimStart());
                 trace.Start();
