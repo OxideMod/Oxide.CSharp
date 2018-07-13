@@ -222,8 +222,7 @@ namespace Oxide.Plugins
                 if (match.Success)
                 {
                     var result = match.Groups[1].Value;
-                    // TODO: Fix Oxide.References to avoid these and other dependency conflicts
-                    if (!result.StartsWith("Oxide.") && !result.StartsWith("Newtonsoft.Json") && !result.StartsWith("Rust.Workshop"))
+                    if (!result.StartsWith("Oxide.") && !result.StartsWith("Newtonsoft.Json") && !result.StartsWith("protobuf-net") && !result.StartsWith("Rust."))
                     {
                         AddReference(plugin, result);
                         Interface.Oxide.LogInfo("Added '// Reference: {0}' in plugin '{1}'", result, plugin.Name);
