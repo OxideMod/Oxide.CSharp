@@ -42,6 +42,8 @@ namespace Oxide.Plugins
 
         public void OnModLoaded()
         {
+            PluginCompiler.CheckCompilerBinary();
+
             // Include references to all loaded game extensions and any assemblies they reference
             foreach (Core.Extensions.Extension extension in Interface.Oxide.GetAllExtensions())
             {

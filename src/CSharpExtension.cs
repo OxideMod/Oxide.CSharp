@@ -59,8 +59,6 @@ namespace Oxide.Plugins
                         $"<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x64/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"64\" />\n</configuration>");
                 }
             }
-
-            PluginCompiler.CheckCompilerBinary();
         }
 
         /// <summary>
