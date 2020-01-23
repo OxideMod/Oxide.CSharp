@@ -47,14 +47,14 @@ namespace Oxide.Plugins
                 case PlatformID.Win32Windows:
                     FileName = "Compiler.exe";
                     binaryPath = Path.Combine(rootDirectory, FileName);
-                    UpdateCheck(); // TODO: Only check once on server startup
+                    UpdateCheck();
                     break;
 
                 case PlatformID.Unix:
                 case PlatformID.MacOSX:
                     FileName = $"Compiler.{(IntPtr.Size != 8 ? "x86" : "x86_x64")}";
                     binaryPath = Path.Combine(rootDirectory, FileName);
-                    UpdateCheck(); // TODO: Only check once on server startup
+                    UpdateCheck();
                     try
                     {
                         if (Syscall.access(binaryPath, AccessModes.X_OK) == 0)

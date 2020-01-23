@@ -101,6 +101,8 @@ namespace Oxide.Plugins
                     Cleanup.Add(oldCompiler);
                 }
             }
+
+            PluginCompiler.CheckCompilerBinary();
         }
 
         /// <summary>

@@ -37,7 +37,6 @@ namespace Oxide.Plugins
         {
             Instance = this;
             CSharpPluginLoader.extension = extension;
-            PluginCompiler.CheckCompilerBinary();
             compiler = new PluginCompiler();
         }
 
