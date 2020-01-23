@@ -143,7 +143,7 @@ namespace Oxide.Plugins
 
                 if (downloadRetries >= 3)
                 {
-                    Interface.Oxide.LogInfo($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Compiler/releases/download/latest/{FileName}");
+                    Interface.Oxide.LogInfo($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Oxide.CSharp/releases/download/latest/{FileName}");
                     return;
                 }
 
@@ -160,7 +160,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Compiler/releases/download/latest/{FileName}");
+                Interface.Oxide.LogError($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Oxide.CSharp/releases/download/latest/{FileName}");
                 Interface.Oxide.LogError(ex.Message);
             }
         }
