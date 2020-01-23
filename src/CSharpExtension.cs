@@ -49,54 +49,14 @@ namespace Oxide.Plugins
         /// <param name="manager"></param>
         public CSharpExtension(ExtensionManager manager) : base(manager)
         {
-            string oldCompiler = Path.Combine(Interface.Oxide.RootDirectory, "CSharpCompiler");
-            string newCompiler = Path.Combine(Interface.Oxide.RootDirectory, "Compiler");
-
             if (Environment.OSVersion.Platform == PlatformID.Unix)
             {
-                Cleanup.Add(Path.Combine(Interface.Oxide.ExtensionDirectory, "Mono.Posix.dll.config"));
-
-                oldCompiler += ".x86";
-                if (File.Exists(oldCompiler))
-                {
-                    newCompiler += ".x86";
-                    if (!File.Exists(newCompiler))
-                    {
-                        File.Move(oldCompiler, newCompiler);
-                    }
-                    Cleanup.Add(oldCompiler);
-                }
-
-                oldCompiler += "_x64";
-                if (File.Exists(oldCompiler))
-                {
-                    newCompiler += "_x64";
-                    if (!File.Exists(newCompiler))
-                    {
-                        File.Move(oldCompiler, newCompiler);
-                    }
-                    Cleanup.Add(oldCompiler);
-                }
-
                 string extDir = Interface.Oxide.ExtensionDirectory;
                 string configPath = Path.Combine(extDir, "Oxide.References.dll.config");
                 if (!File.Exists(configPath) || (new[] { "target=\"x64", "target=\"./x64" }.Any(File.ReadAllText(configPath).Contains)))
                 {
                     File.WriteAllText(configPath, $"<configuration>\n<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x86/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"32\" />\n" +
                         $"<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x64/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"64\" />\n</configuration>");
-                }
-            }
-            else
-            {
-                oldCompiler += ".exe";
-                if (File.Exists(oldCompiler))
-                {
-                    newCompiler += ".exe";
-                    if (!File.Exists(newCompiler))
-                    {
-                        File.Move(oldCompiler, newCompiler);
-                    }
-                    Cleanup.Add(oldCompiler);
                 }
             }
 
