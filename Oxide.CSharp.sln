@@ -1,8 +1,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27004.2008
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29613.14
 MinimumVisualStudioVersion = 15.0
-Project("{73BB4989-CA7F-4148-8687-18760A25BC5E}") = "Oxide.CSharp", "src\Oxide.CSharp.csproj", "{9103D682-D1AA-4A95-A499-896F551AAA62}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Oxide.CSharp", "src\Oxide.CSharp.csproj", "{9103D682-D1AA-4A95-A499-896F551AAA62}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,5 +14,11 @@ Global
 		{9103D682-D1AA-4A95-A499-896F551AAA62}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9103D682-D1AA-4A95-A499-896F551AAA62}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9103D682-D1AA-4A95-A499-896F551AAA62}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9C9C46E6-F364-4D0B-8A9E-184ACD86D0BB}
 	EndGlobalSection
 EndGlobal

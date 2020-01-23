@@ -26,11 +26,11 @@ namespace ObjectStream
 
         public void Open()
         {
-            var readWorker = new Worker();
+            Worker readWorker = new Worker();
             readWorker.Error += OnError;
             readWorker.DoWork(ReadStream);
 
-            var writeWorker = new Worker();
+            Worker writeWorker = new Worker();
             writeWorker.Error += OnError;
             writeWorker.DoWork(WriteStream);
         }
@@ -53,16 +53,22 @@ namespace ObjectStream
         private void OnError(Exception exception)
         {
             if (Error != null)
+            {
                 Error(this, exception);
+            }
         }
 
         private void ReadStream()
         {
             while (_streamWrapper.CanRead)
             {
-                var obj = _streamWrapper.ReadObject();
+                TRead obj = _streamWrapper.ReadObject();
                 ReceiveMessage?.Invoke(this, obj);
-                if (obj != null) continue;
+                if (obj != null)
+                {
+                    continue;
+                }
+
                 CloseImpl();
                 return;
             }
@@ -74,7 +80,9 @@ namespace ObjectStream
             {
                 _writeSignal.WaitOne();
                 while (_writeQueue.Count > 0)
+                {
                     _streamWrapper.WriteObject(_writeQueue.Dequeue());
+                }
             }
         }
     }

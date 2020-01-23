@@ -64,13 +64,20 @@ namespace Oxide.Plugins
 
             IsLoading = true;
             loadCallbacks.Add(callback);
-            if (isPatching) return;
+            if (isPatching)
+            {
+                return;
+            }
 
             PatchAssembly(rawAssembly =>
             {
                 if (rawAssembly == null)
                 {
-                    foreach (var cb in loadCallbacks) cb(true);
+                    foreach (Action<bool> cb in loadCallbacks)
+                    {
+                        cb(true);
+                    }
+
                     loadCallbacks.Clear();
                     IsLoading = false;
                     return;
@@ -79,7 +86,11 @@ namespace Oxide.Plugins
                 LoadedAssembly = Assembly.Load(rawAssembly);
                 isLoaded = true;
 
-                foreach (var cb in loadCallbacks) cb(true);
+                foreach (Action<bool> cb in loadCallbacks)
+                {
+                    cb(true);
+                }
+
                 loadCallbacks.Clear();
 
                 IsLoading = false;
@@ -95,7 +106,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var startedAt = Interface.Oxide.Now;
+            float startedAt = Interface.Oxide.Now;
 
             isPatching = true;
             ThreadPool.QueueUserWorkItem(_ =>
@@ -103,25 +114,27 @@ namespace Oxide.Plugins
                 try
                 {
                     AssemblyDefinition definition;
-                    using (var stream = new MemoryStream(RawAssembly))
+                    using (MemoryStream stream = new MemoryStream(RawAssembly))
+                    {
                         definition = AssemblyDefinition.ReadAssembly(stream);
+                    }
 
-                    var exceptionConstructor = typeof(UnauthorizedAccessException).GetConstructor(new[] { typeof(string) });
-                    var securityException = definition.MainModule.Import(exceptionConstructor);
+                    ConstructorInfo exceptionConstructor = typeof(UnauthorizedAccessException).GetConstructor(new[] { typeof(string) });
+                    MethodReference securityException = definition.MainModule.Import(exceptionConstructor);
 
                     Action<TypeDefinition> patchModuleType = null;
                     patchModuleType = type =>
                     {
-                        foreach (var method in type.Methods)
+                        foreach (MethodDefinition method in type.Methods)
                         {
-                            var changedMethod = false;
+                            bool changedMethod = false;
 
                             if (method.Body == null)
                             {
                                 if (method.HasPInvokeInfo)
                                 {
                                     method.Attributes &= ~MethodAttributes.PInvokeImpl;
-                                    var body = new MethodBody(method);
+                                    MethodBody body = new MethodBody(method);
                                     body.Instructions.Add(Instruction.Create(OpCodes.Ldstr, "PInvoke access is restricted, you are not allowed to use PInvoke"));
                                     body.Instructions.Add(Instruction.Create(OpCodes.Newobj, securityException));
                                     body.Instructions.Add(Instruction.Create(OpCodes.Throw));
@@ -130,12 +143,15 @@ namespace Oxide.Plugins
                             }
                             else
                             {
-                                var replacedMethod = false;
-                                foreach (var variable in method.Body.Variables)
+                                bool replacedMethod = false;
+                                foreach (VariableDefinition variable in method.Body.Variables)
                                 {
-                                    if (!IsNamespaceBlacklisted(variable.VariableType.FullName)) continue;
+                                    if (!IsNamespaceBlacklisted(variable.VariableType.FullName))
+                                    {
+                                        continue;
+                                    }
 
-                                    var body = new MethodBody(method);
+                                    MethodBody body = new MethodBody(method);
                                     body.Instructions.Add(Instruction.Create(OpCodes.Ldstr, $"System access is restricted, you are not allowed to use {variable.VariableType.FullName}"));
                                     body.Instructions.Add(Instruction.Create(OpCodes.Newobj, securityException));
                                     body.Instructions.Add(Instruction.Create(OpCodes.Throw));
@@ -143,21 +159,28 @@ namespace Oxide.Plugins
                                     replacedMethod = true;
                                     break;
                                 }
-                                if (replacedMethod) continue;
+                                if (replacedMethod)
+                                {
+                                    continue;
+                                }
 
-                                var instructions = method.Body.Instructions;
-                                var ilProcessor = method.Body.GetILProcessor();
-                                var first = instructions.First();
+                                References::Mono.Collections.Generic.Collection<Instruction> instructions = method.Body.Instructions;
+                                ILProcessor ilProcessor = method.Body.GetILProcessor();
+                                Instruction first = instructions.First();
 
-                                var i = 0;
+                                int i = 0;
                                 while (i < instructions.Count)
                                 {
-                                    if (changedMethod) break;
-                                    var instruction = instructions[i];
+                                    if (changedMethod)
+                                    {
+                                        break;
+                                    }
+
+                                    Instruction instruction = instructions[i];
                                     if (instruction.OpCode == OpCodes.Ldtoken)
                                     {
-                                        var operand = instruction.Operand as IMetadataTokenProvider;
-                                        var token = operand?.ToString();
+                                        IMetadataTokenProvider operand = instruction.Operand as IMetadataTokenProvider;
+                                        string token = operand?.ToString();
                                         if (IsNamespaceBlacklisted(token))
                                         {
                                             ilProcessor.InsertBefore(first, Instruction.Create(OpCodes.Ldstr, $"System access is restricted, you are not allowed to use {token}"));
@@ -168,8 +191,8 @@ namespace Oxide.Plugins
                                     }
                                     else if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Calli || instruction.OpCode == OpCodes.Callvirt || instruction.OpCode == OpCodes.Ldftn)
                                     {
-                                        var methodCall = instruction.Operand as MethodReference;
-                                        var fullNamespace = methodCall?.DeclaringType.FullName;
+                                        MethodReference methodCall = instruction.Operand as MethodReference;
+                                        string fullNamespace = methodCall?.DeclaringType.FullName;
 
                                         if ((fullNamespace == "System.Type" && methodCall.Name == "GetType") || IsNamespaceBlacklisted(fullNamespace))
                                         {
@@ -181,8 +204,8 @@ namespace Oxide.Plugins
                                     }
                                     else if (instruction.OpCode == OpCodes.Ldfld)
                                     {
-                                        var fieldType = instruction.Operand as FieldReference;
-                                        var fullNamespace = fieldType?.FieldType.FullName;
+                                        FieldReference fieldType = instruction.Operand as FieldReference;
+                                        string fullNamespace = fieldType?.FieldType.FullName;
                                         if (IsNamespaceBlacklisted(fullNamespace))
                                         {
                                             ilProcessor.InsertBefore(first, Instruction.Create(OpCodes.Ldstr, $"System access is restricted, you are not allowed to use {fullNamespace}"));
@@ -211,28 +234,35 @@ namespace Oxide.Plugins
                                 }*/
                             }
                         }
-                        foreach (var nestedType in type.NestedTypes)
+                        foreach (TypeDefinition nestedType in type.NestedTypes)
+                        {
                             patchModuleType(nestedType);
+                        }
                     };
 
-                    foreach (var type in definition.MainModule.Types)
+                    foreach (TypeDefinition type in definition.MainModule.Types)
                     {
                         patchModuleType(type);
 
-                        if (IsCompilerGenerated(type)) continue;
+                        if (IsCompilerGenerated(type))
+                        {
+                            continue;
+                        }
 
                         if (type.Namespace == "Oxide.Plugins")
                         {
                             if (PluginNames.Contains(type.Name))
                             {
-                                var constructor =
+                                MethodDefinition constructor =
                                     type.Methods.FirstOrDefault(
                                         m => !m.IsStatic && m.IsConstructor && !m.HasParameters && !m.IsPublic);
                                 if (constructor != null)
                                 {
-                                    var plugin = CompilablePlugins.SingleOrDefault(p => p.Name == type.Name);
+                                    CompilablePlugin plugin = CompilablePlugins.SingleOrDefault(p => p.Name == type.Name);
                                     if (plugin != null)
+                                    {
                                         plugin.CompilerErrors = "Primary constructor in main class must be public";
+                                    }
                                 }
                                 else
                                 {
@@ -250,21 +280,27 @@ namespace Oxide.Plugins
                         else if (type.FullName != "<Module>")
                         {
                             if (!PluginNames.Any(plugin => type.FullName.StartsWith($"Oxide.Plugins.{plugin}")))
+                            {
                                 Interface.Oxide.LogWarning(PluginNames.Length == 1
                                     ? $"{PluginNames[0]} has polluted the global namespace by defining {type.FullName}"
                                     : $"A plugin has polluted the global namespace by defining {type.FullName}");
+                            }
                         }
                     }
 
                     // TODO: Why is there no error on boot using this?
-                    foreach (var type in definition.MainModule.Types)
+                    foreach (TypeDefinition type in definition.MainModule.Types)
                     {
-                        if (type.Namespace != "Oxide.Plugins" || !PluginNames.Contains(type.Name)) continue;
-                        foreach (var m in type.Methods.Where(m => !m.IsStatic && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && !m.IsSetter && !m.IsGetter))
+                        if (type.Namespace != "Oxide.Plugins" || !PluginNames.Contains(type.Name))
                         {
-                            foreach (var parameter in m.Parameters)
+                            continue;
+                        }
+
+                        foreach (MethodDefinition m in type.Methods.Where(m => !m.IsStatic && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && !m.IsSetter && !m.IsGetter))
+                        {
+                            foreach (ParameterDefinition parameter in m.Parameters)
                             {
-                                foreach (var attribute in parameter.CustomAttributes)
+                                foreach (CustomAttribute attribute in parameter.CustomAttributes)
                                 {
                                     //Interface.Oxide.LogInfo($"{m.FullName} - {parameter.Name} - {attribute.Constructor.FullName}");
                                 }
@@ -272,7 +308,7 @@ namespace Oxide.Plugins
                         }
                     }
 
-                    using (var stream = new MemoryStream())
+                    using (MemoryStream stream = new MemoryStream())
                     {
                         definition.Write(stream);
                         PatchedAssembly = stream.ToArray();
@@ -304,10 +340,18 @@ namespace Oxide.Plugins
 
         private static bool IsNamespaceBlacklisted(string fullNamespace)
         {
-            foreach (var namespaceName in BlacklistedNamespaces)
+            foreach (string namespaceName in BlacklistedNamespaces)
             {
-                if (!fullNamespace.StartsWith(namespaceName)) continue;
-                if (WhitelistedNamespaces.Any(fullNamespace.StartsWith)) continue;
+                if (!fullNamespace.StartsWith(namespaceName))
+                {
+                    continue;
+                }
+
+                if (WhitelistedNamespaces.Any(fullNamespace.StartsWith))
+                {
+                    continue;
+                }
+
                 return true;
             }
             return false;

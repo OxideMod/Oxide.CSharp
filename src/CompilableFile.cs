@@ -56,7 +56,7 @@ namespace Oxide.Plugins
             {
                 if (CompilationQueuedAt > 0f)
                 {
-                    var ago = Interface.Oxide.Now - CompilationQueuedAt;
+                    float ago = Interface.Oxide.Now - CompilationQueuedAt;
                     Interface.Oxide.LogDebug($"Plugin compilation is already queued: {ScriptName} ({ago:0.000} ago)");
                     //RemoteLogger.Debug($"Plugin compilation is already queued: {ScriptName} ({ago:0.000} ago)");
                     return;
@@ -130,7 +130,7 @@ namespace Oxide.Plugins
 
         internal bool HasBeenModified()
         {
-            var lastModifiedAt = LastModifiedAt;
+            DateTime lastModifiedAt = LastModifiedAt;
             CheckLastModificationTime();
             return LastModifiedAt != lastModifiedAt;
         }
@@ -142,8 +142,11 @@ namespace Oxide.Plugins
                 LastModifiedAt = default(DateTime);
                 return;
             }
-            var modifiedTime = GetLastModificationTime();
-            if (modifiedTime != default(DateTime)) LastModifiedAt = modifiedTime;
+            DateTime modifiedTime = GetLastModificationTime();
+            if (modifiedTime != default(DateTime))
+            {
+                LastModifiedAt = modifiedTime;
+            }
         }
 
         internal DateTime GetLastModificationTime()
@@ -169,7 +172,11 @@ namespace Oxide.Plugins
 
         protected virtual void InitFailed(string message = null)
         {
-            if (message != null) Interface.Oxide.LogError(message);
+            if (message != null)
+            {
+                Interface.Oxide.LogError(message);
+            }
+
             LoadCallback?.Invoke(null);
         }
     }

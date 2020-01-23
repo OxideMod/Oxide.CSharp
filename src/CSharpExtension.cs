@@ -78,9 +78,12 @@ namespace Oxide.Plugins
                     Cleanup.Add(oldCompiler);
                 }
 
-                var extDir = Interface.Oxide.ExtensionDirectory;
-                var configPath = Path.Combine(extDir, "Oxide.References.dll.config");
-                if (File.Exists(configPath) && !(new[] { "target=\"x64", "target=\"./x64" }.Any(File.ReadAllText(configPath).Contains))) return;
+                string extDir = Interface.Oxide.ExtensionDirectory;
+                string configPath = Path.Combine(extDir, "Oxide.References.dll.config");
+                if (File.Exists(configPath) && !(new[] { "target=\"x64", "target=\"./x64" }.Any(File.ReadAllText(configPath).Contains)))
+                {
+                    return;
+                }
 
                 File.WriteAllText(configPath, $"<configuration>\n<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x86/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"32\" />\n" +
                     $"<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x64/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"64\" />\n</configuration>");
@@ -140,11 +143,14 @@ namespace Oxide.Plugins
         /// </summary>
         private void OnFrame(float delta)
         {
-            var args = new object[] { delta };
-            foreach (var kv in loader.LoadedPlugins)
+            object[] args = new object[] { delta };
+            foreach (System.Collections.Generic.KeyValuePair<string, Core.Plugins.Plugin> kv in loader.LoadedPlugins)
             {
-                var plugin = kv.Value as CSharpPlugin;
-                if (plugin != null && plugin.HookedOnFrame) plugin.CallHook("OnFrame", args);
+                CSharpPlugin plugin = kv.Value as CSharpPlugin;
+                if (plugin != null && plugin.HookedOnFrame)
+                {
+                    plugin.CallHook("OnFrame", args);
+                }
             }
         }
     }

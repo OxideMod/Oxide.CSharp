@@ -78,15 +78,22 @@ namespace Oxide.Plugins
         /// <param name="manager"></param>
         public override void HandleAddedToManager(PluginManager manager)
         {
-            foreach (var method in GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (MethodInfo method in GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                var commandAttribute = method.GetCustomAttributes(typeof(CommandAttribute), true);
-                var permissionAttribute = method.GetCustomAttributes(typeof(PermissionAttribute), true);
-                if (commandAttribute.Length <= 0) continue;
+                object[] commandAttribute = method.GetCustomAttributes(typeof(CommandAttribute), true);
+                object[] permissionAttribute = method.GetCustomAttributes(typeof(PermissionAttribute), true);
+                if (commandAttribute.Length <= 0)
+                {
+                    continue;
+                }
 
-                var cmd = commandAttribute[0] as CommandAttribute;
-                var perm = permissionAttribute.Length <= 0 ? null : permissionAttribute[0] as PermissionAttribute;
-                if (cmd == null) continue;
+                CommandAttribute cmd = commandAttribute[0] as CommandAttribute;
+                PermissionAttribute perm = permissionAttribute.Length <= 0 ? null : permissionAttribute[0] as PermissionAttribute;
+                if (cmd == null)
+                {
+                    continue;
+                }
+
                 AddCovalenceCommand(cmd.Commands, perm?.Permission, (caller, command, args) =>
                 {
                     CallHook(method.Name, caller, command, args);

@@ -44,7 +44,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                var type = CompiledAssembly.LoadedAssembly.GetType($"Oxide.Plugins.{Name}");
+                Type type = CompiledAssembly.LoadedAssembly.GetType($"Oxide.Plugins.{Name}");
                 if (type == null)
                 {
                     InitFailed($"Unable to find main plugin class: {Name}");
@@ -63,7 +63,7 @@ namespace Oxide.Plugins
                 }
                 catch (TargetInvocationException invocationException)
                 {
-                    var ex = invocationException.InnerException;
+                    Exception ex = invocationException.InnerException;
                     InitFailed($"Unable to load {ScriptName}. {ex.ToString()}");
                     return;
                 }
@@ -95,7 +95,11 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (!CompiledAssembly.IsBatch) LastGoodAssembly = CompiledAssembly;
+                if (!CompiledAssembly.IsBatch)
+                {
+                    LastGoodAssembly = CompiledAssembly;
+                }
+
                 callback?.Invoke(plugin);
             });
         }
@@ -105,11 +109,19 @@ namespace Oxide.Plugins
             base.OnCompilationStarted();
 
             // Enqueue compilation of any plugins which depend on this plugin
-            foreach (var plugin in Interface.Oxide.RootPluginManager.GetPlugins())
+            foreach (Core.Plugins.Plugin plugin in Interface.Oxide.RootPluginManager.GetPlugins())
             {
-                if (!(plugin is CSharpPlugin)) continue;
-                var compilablePlugin = CSharpPluginLoader.GetCompilablePlugin(Directory, plugin.Name);
-                if (!compilablePlugin.Requires.Contains(Name)) continue;
+                if (!(plugin is CSharpPlugin))
+                {
+                    continue;
+                }
+
+                CompilablePlugin compilablePlugin = CSharpPluginLoader.GetCompilablePlugin(Directory, plugin.Name);
+                if (!compilablePlugin.Requires.Contains(Name))
+                {
+                    continue;
+                }
+
                 compilablePlugin.CompiledAssembly = null;
                 Loader.Load(compilablePlugin);
             }

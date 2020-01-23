@@ -19,7 +19,7 @@ namespace ObjectStream.Threading
 
         private void DoWorkImpl(object oAction)
         {
-            var action = (Action)oAction;
+            Action action = (Action)oAction;
             try
             {
                 action();
@@ -33,7 +33,9 @@ namespace ObjectStream.Threading
         private void Fail(Exception exception)
         {
             if (Error != null)
+            {
                 Error(exception);
+            }
         }
 
         private void Callback(Action action)

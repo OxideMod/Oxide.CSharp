@@ -51,29 +51,34 @@ namespace Oxide.Core.CSharp
             stringEquals = module.Import(typeof(string).GetMethod("Equals", new[] { typeof(string) }));
 
             // Copy method definition from base class
-            var base_assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll"));
-            var base_module = base_assembly.MainModule;
-            var base_type = module.Import(base_assembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
-            var base_method = module.Import(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
+            AssemblyDefinition base_assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll"));
+            ModuleDefinition base_module = base_assembly.MainModule;
+            TypeDefinition base_type = module.Import(base_assembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
+            MethodDefinition base_method = module.Import(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
 
             // Create method override based on virtual method signature
             method = new MethodDefinition(base_method.Name, base_method.Attributes, base_module.Import(base_method.ReturnType)) { DeclaringType = type };
-            foreach (var parameter in base_method.Parameters)
+            foreach (ParameterDefinition parameter in base_method.Parameters)
             {
-                var new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, base_module.Import(parameter.ParameterType))
+                ParameterDefinition new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, base_module.Import(parameter.ParameterType))
                 {
                     IsOut = parameter.IsOut,
                     Constant = parameter.Constant,
                     MarshalInfo = parameter.MarshalInfo,
                     IsReturnValue = parameter.IsReturnValue
                 };
-                foreach (var attribute in parameter.CustomAttributes)
+                foreach (CustomAttribute attribute in parameter.CustomAttributes)
+                {
                     new_param.CustomAttributes.Add(new CustomAttribute(module.Import(attribute.Constructor)));
+                }
+
                 method.Parameters.Add(new_param);
             }
 
-            foreach (var attribute in base_method.CustomAttributes)
+            foreach (CustomAttribute attribute in base_method.CustomAttributes)
+            {
                 method.CustomAttributes.Add(new CustomAttribute(module.Import(attribute.Constructor)));
+            }
 
             method.ImplAttributes = base_method.ImplAttributes;
             method.SemanticsAttributes = base_method.SemanticsAttributes;
@@ -100,7 +105,7 @@ namespace Oxide.Core.CSharp
             // Check for name null or empty
             AddInstruction(OpCodes.Ldarg_1);
             AddInstruction(OpCodes.Call, isNullOrEmpty);
-            var empty = AddInstruction(OpCodes.Brfalse, body.Instructions[0]);
+            Instruction empty = AddInstruction(OpCodes.Brfalse, body.Instructions[0]);
             Return(false);
 
             // Get method name length
@@ -113,51 +118,64 @@ namespace Oxide.Core.CSharp
             AddInstruction(OpCodes.Stloc_1);
 
             // Find all hook methods defined by the plugin
-            foreach (var m in type.Methods.Where(m => !m.IsStatic && (m.IsPrivate || IsHookMethod(m)) && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && m.DeclaringType == type && !m.IsSetter && !m.IsGetter))
+            foreach (MethodDefinition m in type.Methods.Where(m => !m.IsStatic && (m.IsPrivate || IsHookMethod(m)) && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && m.DeclaringType == type && !m.IsSetter && !m.IsGetter))
             {
                 //ignore compiler generated
-                if (m.Name.Contains("<")) continue;
+                if (m.Name.Contains("<"))
+                {
+                    continue;
+                }
 
-                var name = m.Name;
+                string name = m.Name;
                 if (m.Parameters.Count > 0)
+                {
                     name += $"({string.Join(", ", m.Parameters.Select(x => x.ParameterType.ToString().Replace("/", "+").Replace("<", "[").Replace(">", "]")).ToArray())})";
+                }
 
-                if (!hookMethods.ContainsKey(name)) hookMethods[name] = m;
+                if (!hookMethods.ContainsKey(name))
+                {
+                    hookMethods[name] = m;
+                }
             }
 
             // Build a hook method name trie
-            var root_node = new Node();
-            foreach (var method_name in hookMethods.Keys)
+            Node root_node = new Node();
+            foreach (string method_name in hookMethods.Keys)
             {
-                var current_node = root_node;
-                for (var i = 1; i <= method_name.Length; i++)
+                Node current_node = root_node;
+                for (int i = 1; i <= method_name.Length; i++)
                 {
-                    var letter = method_name[i - 1];
-                    Node next_node;
-                    if (!current_node.Edges.TryGetValue(letter, out next_node))
+                    char letter = method_name[i - 1];
+                    if (!current_node.Edges.TryGetValue(letter, out Node next_node))
                     {
                         next_node = new Node { Parent = current_node, Char = letter };
                         current_node.Edges[letter] = next_node;
                     }
-                    if (i == method_name.Length) next_node.Name = method_name;
+                    if (i == method_name.Length)
+                    {
+                        next_node.Name = method_name;
+                    }
+
                     current_node = next_node;
                 }
             }
 
             // Build conditional method call logic from trie nodes
-            var n = 1;
-            foreach (var edge in root_node.Edges.Keys)
+            int n = 1;
+            foreach (char edge in root_node.Edges.Keys)
+            {
                 BuildNode(root_node.Edges[edge], n++);
+            }
 
             // No valid method was found
             endInstruction = Return(false);
 
-            foreach (var instruction in jumpToEdgePlaceholderTargets.Keys)
+            foreach (Instruction instruction in jumpToEdgePlaceholderTargets.Keys)
             {
                 instruction.Operand = jumpToEdgePlaceholderTargets[instruction].FirstInstruction;
             }
 
-            foreach (var instruction in jumpToEndPlaceholders)
+            foreach (Instruction instruction in jumpToEndPlaceholders)
             {
                 instruction.Operand = endInstruction;
             }
@@ -167,10 +185,12 @@ namespace Oxide.Core.CSharp
 
         private bool IsHookMethod(MethodDefinition method)
         {
-            foreach (var attribute in method.CustomAttributes)
+            foreach (CustomAttribute attribute in method.CustomAttributes)
             {
                 if (attribute.AttributeType.FullName == hook_attribute)
+                {
                     return true;
+                }
             }
             return false;
         }
@@ -187,9 +207,14 @@ namespace Oxide.Core.CSharp
 
             // Check the char at the current position
             if (edge_number == 1)
+            {
                 AddInstruction(OpCodes.Ldarg_1); //method_name
+            }
             else
+            {
                 node.FirstInstruction = AddInstruction(OpCodes.Ldarg_1);
+            }
+
             AddInstruction(OpCodes.Ldloc_1);                            // i
             AddInstruction(OpCodes.Callvirt, getChars);                 // method_name[i]
             AddInstruction(Ldc_I4_n(node.Char));
@@ -207,9 +232,12 @@ namespace Oxide.Core.CSharp
 
             if (node.Edges.Count == 1 && node.Name == null)
             {
-                var last_edge = node;
+                Node last_edge = node;
                 while (last_edge.Edges.Count == 1 && last_edge.Name == null)
+                {
                     last_edge = last_edge.Edges.Values.First();
+                }
+
                 if (last_edge.Edges.Count == 0 && last_edge.Name != null)
                 {
                     // There is only one remaining possible hook on this path
@@ -240,31 +268,37 @@ namespace Oxide.Core.CSharp
                 AddInstruction(OpCodes.Ldloc_0);
                 // If the method name is longer than the current position
                 if (node.Edges.Count > 0)
+                {
                     JumpToEdge(node.Edges.Values.First());
+                }
                 else
+                {
                     JumpToEnd();
+                }
 
                 // Method has been found
                 CallMethod(hookMethods[node.Name]);
                 Return(true);
             }
 
-            var n = 1;
-            foreach (var edge in node.Edges.Keys)
+            int n = 1;
+            foreach (char edge in node.Edges.Keys)
+            {
                 BuildNode(node.Edges[edge], n++);
+            }
         }
 
         private void CallMethod(MethodDefinition method)
         {
-            var paramDict = new Dictionary<ParameterDefinition, VariableDefinition>();
+            Dictionary<ParameterDefinition, VariableDefinition> paramDict = new Dictionary<ParameterDefinition, VariableDefinition>();
             //check for ref/out param
-            for (var i = 0; i < method.Parameters.Count; i++)
+            for (int i = 0; i < method.Parameters.Count; i++)
             {
-                var parameter = method.Parameters[i];
-                var param = parameter.ParameterType as ByReferenceType;
+                ParameterDefinition parameter = method.Parameters[i];
+                ByReferenceType param = parameter.ParameterType as ByReferenceType;
                 if (param != null)
                 {
-                    var refParam = AddVariable(module.Import(param.ElementType));
+                    VariableDefinition refParam = AddVariable(module.Import(param.ElementType));
                     AddInstruction(OpCodes.Ldarg_3);    // object[] params
                     AddInstruction(Ldc_I4_n(i));        // param_number
                     AddInstruction(OpCodes.Ldelem_Ref);
@@ -274,13 +308,16 @@ namespace Oxide.Core.CSharp
                 }
             }
 
-            if (method.ReturnType.Name != "Void") AddInstruction(OpCodes.Ldarg_2); // out object ret
+            if (method.ReturnType.Name != "Void")
+            {
+                AddInstruction(OpCodes.Ldarg_2); // out object ret
+            }
 
             AddInstruction(OpCodes.Ldarg_0);    // this
-            for (var i = 0; i < method.Parameters.Count; i++)
+            for (int i = 0; i < method.Parameters.Count; i++)
             {
-                var parameter = method.Parameters[i];
-                var param = parameter.ParameterType as ByReferenceType;
+                ParameterDefinition parameter = method.Parameters[i];
+                ByReferenceType param = parameter.ParameterType as ByReferenceType;
                 if (param != null)
                 {
                     AddInstruction(OpCodes.Ldloca, paramDict[parameter]);
@@ -297,10 +334,10 @@ namespace Oxide.Core.CSharp
             AddInstruction(OpCodes.Call, module.Import(method));
 
             //handle ref/out params
-            for (var i = 0; i < method.Parameters.Count; i++)
+            for (int i = 0; i < method.Parameters.Count; i++)
             {
-                var parameter = method.Parameters[i];
-                var param = parameter.ParameterType as ByReferenceType;
+                ParameterDefinition parameter = method.Parameters[i];
+                ByReferenceType param = parameter.ParameterType as ByReferenceType;
                 if (param != null)
                 {
                     AddInstruction(OpCodes.Ldarg_3);    // object[] params
@@ -313,21 +350,25 @@ namespace Oxide.Core.CSharp
 
             if (method.ReturnType.Name != "Void")
             {
-                if (method.ReturnType.Name != "Object") AddInstruction(OpCodes.Box, module.Import(method.ReturnType));
+                if (method.ReturnType.Name != "Object")
+                {
+                    AddInstruction(OpCodes.Box, module.Import(method.ReturnType));
+                }
+
                 AddInstruction(OpCodes.Stind_Ref);
             }
         }
 
         private Instruction Return(bool value)
         {
-            var instruction = AddInstruction(Ldc_I4_n(value ? 1 : 0));
+            Instruction instruction = AddInstruction(Ldc_I4_n(value ? 1 : 0));
             AddInstruction(OpCodes.Ret);
             return instruction;
         }
 
         private void JumpToEdge(Node node)
         {
-            var instruction = AddInstruction(OpCodes.Bne_Un, body.Instructions[1]);
+            Instruction instruction = AddInstruction(OpCodes.Bne_Un, body.Instructions[1]);
             jumpToEdgePlaceholderTargets[instruction] = node;
         }
 
@@ -374,22 +415,58 @@ namespace Oxide.Core.CSharp
 
         public VariableDefinition AddVariable(TypeReference typeRef, string name = "")
         {
-            var def = new VariableDefinition(name, typeRef);
+            VariableDefinition def = new VariableDefinition(name, typeRef);
             body.Variables.Add(def);
             return def;
         }
 
         private Instruction Ldc_I4_n(int n)
         {
-            if (n == 0) return Instruction.Create(OpCodes.Ldc_I4_0);
-            if (n == 1) return Instruction.Create(OpCodes.Ldc_I4_1);
-            if (n == 2) return Instruction.Create(OpCodes.Ldc_I4_2);
-            if (n == 3) return Instruction.Create(OpCodes.Ldc_I4_3);
-            if (n == 4) return Instruction.Create(OpCodes.Ldc_I4_4);
-            if (n == 5) return Instruction.Create(OpCodes.Ldc_I4_5);
-            if (n == 6) return Instruction.Create(OpCodes.Ldc_I4_6);
-            if (n == 7) return Instruction.Create(OpCodes.Ldc_I4_7);
-            if (n == 8) return Instruction.Create(OpCodes.Ldc_I4_8);
+            if (n == 0)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_0);
+            }
+
+            if (n == 1)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_1);
+            }
+
+            if (n == 2)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_2);
+            }
+
+            if (n == 3)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_3);
+            }
+
+            if (n == 4)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_4);
+            }
+
+            if (n == 5)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_5);
+            }
+
+            if (n == 6)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_6);
+            }
+
+            if (n == 7)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_7);
+            }
+
+            if (n == 8)
+            {
+                return Instruction.Create(OpCodes.Ldc_I4_8);
+            }
+
             return Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)n);
         }
     }

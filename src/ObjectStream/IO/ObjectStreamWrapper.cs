@@ -39,7 +39,11 @@ namespace ObjectStream.IO
 
         public void Close()
         {
-            if (!_run) return;
+            if (!_run)
+            {
+                return;
+            }
+
             _run = false;
             try
             {
@@ -55,7 +59,7 @@ namespace ObjectStream.IO
 
         public TRead ReadObject()
         {
-            var len = ReadLength();
+            int len = ReadLength();
             return len == 0 ? null : ReadObject(len);
         }
 
@@ -64,14 +68,22 @@ namespace ObjectStream.IO
         private int ReadLength()
         {
             const int lensize = sizeof(int);
-            var lenbuf = new byte[lensize];
-            var bytesRead = _inStream.Read(lenbuf, 0, lensize);
-            if (bytesRead == 0) return 0;
+            byte[] lenbuf = new byte[lensize];
+            int bytesRead = _inStream.Read(lenbuf, 0, lensize);
+            if (bytesRead == 0)
+            {
+                return 0;
+            }
+
             if (bytesRead != lensize)
             {
                 // TODO: Hack to ignore BOM
                 Array.Resize(ref lenbuf, Encoding.UTF8.GetPreamble().Length);
-                if (Encoding.UTF8.GetPreamble().SequenceEqual(lenbuf)) return ReadLength();
+                if (Encoding.UTF8.GetPreamble().SequenceEqual(lenbuf))
+                {
+                    return ReadLength();
+                }
+
                 throw new IOException(string.Format("Expected {0} bytes but read {1}", lensize, bytesRead));
             }
             return IPAddress.NetworkToHostOrder(BitConverter.ToInt32(lenbuf, 0));
@@ -79,12 +91,15 @@ namespace ObjectStream.IO
 
         private TRead ReadObject(int len)
         {
-            var data = new byte[len];
+            byte[] data = new byte[len];
             int count;
             int sum = 0;
             while (len - sum > 0 && (count = _inStream.Read(data, sum, len - sum)) > 0)
+            {
                 sum += count;
-            using (var memoryStream = new MemoryStream(data))
+            }
+
+            using (MemoryStream memoryStream = new MemoryStream(data))
             {
                 return (TRead)_binaryFormatter.Deserialize(memoryStream);
             }
@@ -94,7 +109,7 @@ namespace ObjectStream.IO
 
         public void WriteObject(TWrite obj)
         {
-            var data = Serialize(obj);
+            byte[] data = Serialize(obj);
             WriteLength(data.Length);
             WriteObject(data);
             Flush();
@@ -104,7 +119,7 @@ namespace ObjectStream.IO
 
         private byte[] Serialize(TWrite obj)
         {
-            using (var memoryStream = new MemoryStream())
+            using (MemoryStream memoryStream = new MemoryStream())
             {
                 _binaryFormatter.Serialize(memoryStream, obj);
                 return memoryStream.ToArray();
@@ -113,7 +128,7 @@ namespace ObjectStream.IO
 
         private void WriteLength(int len)
         {
-            var lenbuf = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(len));
+            byte[] lenbuf = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(len));
             _outStream.Write(lenbuf, 0, lenbuf.Length);
         }
 

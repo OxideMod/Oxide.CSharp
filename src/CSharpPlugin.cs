@@ -45,14 +45,25 @@ namespace Oxide.Plugins
 
         private void SetVersion(string version)
         {
-            var versionParts = version.Split('.').Select(part =>
+            List<ushort> versionParts = version.Split('.').Select(part =>
             {
-                ushort number;
-                if (!ushort.TryParse(part, out number)) number = 0;
+                if (!ushort.TryParse(part, out ushort number))
+                {
+                    number = 0;
+                }
                 return number;
             }).ToList();
-            while (versionParts.Count < 3) versionParts.Add(0);
-            if (versionParts.Count > 3) Interface.Oxide.LogWarning($"Version `{version}` is invalid for {Title}, should be `major.minor.patch`");
+
+            while (versionParts.Count < 3)
+            {
+                versionParts.Add(0);
+            }
+
+            if (versionParts.Count > 3)
+            {
+                Interface.Oxide.LogWarning($"Version `{version}` is invalid for {Title}, should be `major.minor.patch`");
+            }
+
             Version = new VersionNumber(versionParts[0], versionParts[1], versionParts[2]);
         }
     }
@@ -151,7 +162,7 @@ namespace Oxide.Plugins
 
             public bool HasValidConstructor(params Type[] argument_types)
             {
-                var type = GenericArguments[1];
+                Type type = GenericArguments[1];
                 return type.GetConstructor(new Type[0]) != null || type.GetConstructor(argument_types) != null;
             }
 
@@ -159,21 +170,28 @@ namespace Oxide.Plugins
 
             public bool LookupMethod(string method_name, params Type[] argument_types)
             {
-                var method = FieldType.GetMethod(method_name, argument_types);
-                if (method == null) return false;
+                MethodInfo method = FieldType.GetMethod(method_name, argument_types);
+                if (method == null)
+                {
+                    return false;
+                }
+
                 Methods[method_name] = method;
                 return true;
             }
 
             public object Call(string method_name, params object[] args)
             {
-                MethodInfo method;
-                if (!Methods.TryGetValue(method_name, out method))
+                if (!Methods.TryGetValue(method_name, out MethodInfo method))
                 {
                     method = FieldType.GetMethod(method_name, BindingFlags.Instance | BindingFlags.Public);
                     Methods[method_name] = method;
                 }
-                if (method == null) throw new MissingMethodException(FieldType.Name, method_name);
+                if (method == null)
+                {
+                    throw new MissingMethodException(FieldType.Name, method_name);
+                }
+
                 return method.Invoke(Value, args);
             }
         }
@@ -201,24 +219,33 @@ namespace Oxide.Plugins
         {
             timer = new PluginTimers(this);
 
-            var type = GetType();
-            foreach (var field in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            Type type = GetType();
+            foreach (FieldInfo field in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                var reference_attributes = field.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
+                object[] reference_attributes = field.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
                 if (reference_attributes.Length > 0)
                 {
-                    var pluginReference = reference_attributes[0] as PluginReferenceAttribute;
+                    PluginReferenceAttribute pluginReference = reference_attributes[0] as PluginReferenceAttribute;
                     pluginReferenceFields[pluginReference.Name ?? field.Name] = field;
                 }
             }
-            foreach (var method in type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (MethodInfo method in type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                var info_attributes = method.GetCustomAttributes(typeof(HookMethodAttribute), true);
-                if (info_attributes.Length > 0) continue;
+                object[] info_attributes = method.GetCustomAttributes(typeof(HookMethodAttribute), true);
+                if (info_attributes.Length > 0)
+                {
+                    continue;
+                }
 
-                if (method.Name.Equals("OnFrame")) HookedOnFrame = true;
+                if (method.Name.Equals("OnFrame"))
+                {
+                    HookedOnFrame = true;
+                }
                 // Assume all private instance methods which are not explicitly hooked could be hooks
-                if (method.DeclaringType.Name == type.Name) AddHookMethod(method.Name, method);
+                if (method.DeclaringType.Name == type.Name)
+                {
+                    AddHookMethod(method.Name, method);
+                }
             }
         }
 
@@ -227,10 +254,10 @@ namespace Oxide.Plugins
             Name = name;
             Filename = path;
 
-            var infoAttributes = GetType().GetCustomAttributes(typeof(InfoAttribute), true);
+            object[] infoAttributes = GetType().GetCustomAttributes(typeof(InfoAttribute), true);
             if (infoAttributes.Length > 0)
             {
-                var info = infoAttributes[0] as InfoAttribute;
+                InfoAttribute info = infoAttributes[0] as InfoAttribute;
                 Title = info.Title;
                 Author = info.Author;
                 Version = info.Version;
@@ -242,17 +269,17 @@ namespace Oxide.Plugins
                 return false;
             }
 
-            var descriptionAttributes = GetType().GetCustomAttributes(typeof(DescriptionAttribute), true);
+            object[] descriptionAttributes = GetType().GetCustomAttributes(typeof(DescriptionAttribute), true);
             if (descriptionAttributes.Length > 0)
             {
-                var info = descriptionAttributes[0] as DescriptionAttribute;
+                DescriptionAttribute info = descriptionAttributes[0] as DescriptionAttribute;
                 Description = info.Description;
             }
 
-            var config = GetType().GetMethod("LoadDefaultConfig", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo config = GetType().GetMethod("LoadDefaultConfig", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             HasConfig = config.DeclaringType != typeof(Plugin);
 
-            var messages = GetType().GetMethod("LoadDefaultMessages", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo messages = GetType().GetMethod("LoadDefaultMessages", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             HasMessages = messages.DeclaringType != typeof(Plugin);
 
             return true;
@@ -262,9 +289,15 @@ namespace Oxide.Plugins
         {
             base.HandleAddedToManager(manager);
 
-            if (Filename != null) Watcher.AddMapping(Name);
+            if (Filename != null)
+            {
+                Watcher.AddMapping(Name);
+            }
 
-            foreach (var name in pluginReferenceFields.Keys) pluginReferenceFields[name].SetValue(this, manager.GetPlugin(name));
+            foreach (string name in pluginReferenceFields.Keys)
+            {
+                pluginReferenceFields[name].SetValue(this, manager.GetPlugin(name));
+            }
 
             /*var compilable_plugin = CSharpPluginLoader.GetCompilablePlugin(Interface.Oxide.PluginDirectory, Name);
             if (compilable_plugin != null && compilable_plugin.CompiledAssembly != null)
@@ -286,11 +319,17 @@ namespace Oxide.Plugins
 
         public override void HandleRemovedFromManager(PluginManager manager)
         {
-            if (IsLoaded) CallHook("Unload", null);
+            if (IsLoaded)
+            {
+                CallHook("Unload", null);
+            }
 
             Watcher.RemoveMapping(Name);
 
-            foreach (var name in pluginReferenceFields.Keys) pluginReferenceFields[name].SetValue(this, null);
+            foreach (string name in pluginReferenceFields.Keys)
+            {
+                pluginReferenceFields[name].SetValue(this, null);
+            }
 
             base.HandleRemovedFromManager(manager);
         }
@@ -308,28 +347,41 @@ namespace Oxide.Plugins
             {
                 if (args != null && args.Length > 0)
                 {
-                    var parameters = method.Parameters;
-                    for (var i = 0; i < args.Length; i++)
+                    ParameterInfo[] parameters = method.Parameters;
+                    for (int i = 0; i < args.Length; i++)
                     {
-                        var value = args[i];
-                        if (value == null) continue;
-                        var parameter_type = parameters[i].ParameterType;
-                        if (!parameter_type.IsValueType) continue;
-                        var argument_type = value.GetType();
+                        object value = args[i];
+                        if (value == null)
+                        {
+                            continue;
+                        }
+
+                        Type parameter_type = parameters[i].ParameterType;
+                        if (!parameter_type.IsValueType)
+                        {
+                            continue;
+                        }
+
+                        Type argument_type = value.GetType();
                         if (parameter_type != typeof(object) && argument_type != parameter_type)
+                        {
                             args[i] = Convert.ChangeType(value, parameter_type);
+                        }
                     }
                 }
                 try
                 {
-                    object ret;
-                    if (DirectCallHook(method.Name, out ret, args)) return ret;
+                    if (DirectCallHook(method.Name, out object ret, args))
+                    {
+                        return ret;
+                    }
+
                     PrintWarning("Unable to call hook directly: " + method.Name);
                 }
                 catch (InvalidProgramException ex)
                 {
                     Interface.Oxide.LogError("Hook dispatch failure detected, falling back to reflection based dispatch. " + ex);
-                    var compilablePlugin = CSharpPluginLoader.GetCompilablePlugin(Interface.Oxide.PluginDirectory, Name);
+                    CompilablePlugin compilablePlugin = CSharpPluginLoader.GetCompilablePlugin(Interface.Oxide.PluginDirectory, Name);
                     if (compilablePlugin?.CompiledAssembly != null)
                     {
                         File.WriteAllBytes(Interface.Oxide.PluginDirectory + "\\" + Name + ".dump", compilablePlugin.CompiledAssembly.PatchedAssembly);
@@ -354,15 +406,19 @@ namespace Oxide.Plugins
         [HookMethod("OnPluginLoaded")]
         private void base_OnPluginLoaded(Plugin plugin)
         {
-            FieldInfo field;
-            if (pluginReferenceFields.TryGetValue(plugin.Name, out field)) field.SetValue(this, plugin);
+            if (pluginReferenceFields.TryGetValue(plugin.Name, out FieldInfo field))
+            {
+                field.SetValue(this, plugin);
+            }
         }
 
         [HookMethod("OnPluginUnloaded")]
         private void base_OnPluginUnloaded(Plugin plugin)
         {
-            FieldInfo field;
-            if (pluginReferenceFields.TryGetValue(plugin.Name, out field)) field.SetValue(this, null);
+            if (pluginReferenceFields.TryGetValue(plugin.Name, out FieldInfo field))
+            {
+                field.SetValue(this, null);
+            }
         }
 
         /// <summary>
@@ -404,10 +460,17 @@ namespace Oxide.Plugins
         /// <param name="timeStamp"></param>
         protected void LogToFile(string filename, string text, Plugin plugin, bool timeStamp = true)
         {
-            var path = Path.Combine(Interface.Oxide.LogDirectory, plugin.Name);
-            if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+            string path = Path.Combine(Interface.Oxide.LogDirectory, plugin.Name);
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
+
             filename = $"{plugin.Name.ToLower()}_{filename.ToLower()}{(timeStamp ? $"-{DateTime.Now:yyyy-MM-dd}" : "")}.txt";
-            using (var writer = new StreamWriter(Path.Combine(path, Utility.CleanPath(filename)), true)) writer.WriteLine(text);
+            using (StreamWriter writer = new StreamWriter(Path.Combine(path, Utility.CleanPath(filename)), true))
+            {
+                writer.WriteLine(text);
+            }
         }
 
         /// <summary>

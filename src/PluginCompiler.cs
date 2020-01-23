@@ -31,8 +31,8 @@ namespace Oxide.Plugins
         public static void CheckCompilerBinary()
         {
             BinaryPath = null;
-            var rootDirectory = Interface.Oxide.RootDirectory;
-            var binaryPath = Path.Combine(rootDirectory, FileName);
+            string rootDirectory = Interface.Oxide.RootDirectory;
+            string binaryPath = Path.Combine(rootDirectory, FileName);
 
             if (File.Exists(binaryPath))
             {
@@ -57,7 +57,10 @@ namespace Oxide.Plugins
                     UpdateCheck(); // TODO: Only check once on server startup
                     try
                     {
-                        if (Syscall.access(binaryPath, AccessModes.X_OK) == 0) break;
+                        if (Syscall.access(binaryPath, AccessModes.X_OK) == 0)
+                        {
+                            break;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -82,12 +85,15 @@ namespace Oxide.Plugins
 
         private void DependencyTrace()
         {
-            if (TraceRan || Environment.OSVersion.Platform != PlatformID.Unix) return;
+            if (TraceRan || Environment.OSVersion.Platform != PlatformID.Unix)
+            {
+                return;
+            }
 
             try
             {
                 Interface.Oxide.LogWarning($"Running dependency trace for {FileName}");
-                var trace = new Process
+                Process trace = new Process
                 {
                     StartInfo =
                     {
@@ -125,15 +131,19 @@ namespace Oxide.Plugins
             {
                 Interface.Oxide.LogInfo($"Downloading {FileName} for .cs (C#) plugin compilation");
 
-                var stream = response.GetResponseStream();
-                var fs = new FileStream(FileName, FileMode.Create, FileAccess.Write, FileShare.None);
-                var bufferSize = 10000;
-                var buffer = new byte[bufferSize];
+                Stream stream = response.GetResponseStream();
+                FileStream fs = new FileStream(FileName, FileMode.Create, FileAccess.Write, FileShare.None);
+                int bufferSize = 10000;
+                byte[] buffer = new byte[bufferSize];
 
                 while (true)
                 {
-                    var result = stream.Read(buffer, 0, bufferSize);
-                    if (result == -1 || result == 0) break;
+                    int result = stream.Read(buffer, 0, bufferSize);
+                    if (result == -1 || result == 0)
+                    {
+                        break;
+                    }
+
                     fs.Write(buffer, 0, result);
                 }
                 fs.Flush();
@@ -147,7 +157,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                var localHash = File.Exists(BinaryPath) ? GetHash(BinaryPath, Algorithms.MD5) : "0";
+                string localHash = File.Exists(BinaryPath) ? GetHash(BinaryPath, Algorithms.MD5) : "0";
                 if (remoteHash != localHash)
                 {
                     Interface.Oxide.LogInfo($"Local hash did not match remote hash for {FileName}, attempting download again");
@@ -169,13 +179,17 @@ namespace Oxide.Plugins
         {
             try
             {
-                var filePath = Path.Combine(Interface.Oxide.RootDirectory, FileName);
-                var request = (HttpWebRequest)WebRequest.Create($"https://umod-01.nyc3.digitaloceanspaces.com/{FileName}");
-                var response = (HttpWebResponse)request.GetResponse();
-                var statusCode = (int)response.StatusCode;
-                if (statusCode != 200) Interface.Oxide.LogWarning($"Status code from download location was not okay (code {statusCode})");
-                var remoteHash = response.Headers[HttpResponseHeader.ETag].Trim('"');
-                var localHash = File.Exists(filePath) ? GetHash(filePath, Algorithms.MD5) : "0";
+                string filePath = Path.Combine(Interface.Oxide.RootDirectory, FileName);
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://umod-01.nyc3.digitaloceanspaces.com/{FileName}");
+                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                int statusCode = (int)response.StatusCode;
+                if (statusCode != 200)
+                {
+                    Interface.Oxide.LogWarning($"Status code from download location was not okay (code {statusCode})");
+                }
+
+                string remoteHash = response.Headers[HttpResponseHeader.ETag].Trim('"');
+                string localHash = File.Exists(filePath) ? GetHash(filePath, Algorithms.MD5) : "0";
                 Interface.Oxide.LogInfo($"Latest compiler MD5: {remoteHash}");
                 Interface.Oxide.LogInfo($"Local compiler MD5: {localHash}");
                 if (remoteHash != localHash)
@@ -214,8 +228,8 @@ namespace Oxide.Plugins
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
         {
-            var id = lastId++;
-            var compilation = new Compilation(id, callback, plugins);
+            int id = lastId++;
+            Compilation compilation = new Compilation(id, callback, plugins);
             compilations[id] = compilation;
             compilation.Prepare(() => EnqueueCompilation(compilation));
         }
@@ -223,23 +237,36 @@ namespace Oxide.Plugins
         public void Shutdown()
         {
             ready = false;
-            var endedProcess = process;
-            if (endedProcess != null) endedProcess.Exited -= OnProcessExited;
+            Process endedProcess = process;
+            if (endedProcess != null)
+            {
+                endedProcess.Exited -= OnProcessExited;
+            }
+
             process = null;
-            if (client == null) return;
+            if (client == null)
+            {
+                return;
+            }
 
             client.Message -= OnMessage;
             client.Error -= OnError;
             client.PushMessage(new CompilerMessage { Type = CompilerMessageType.Exit });
             client.Stop();
             client = null;
-            if (endedProcess == null) return;
+            if (endedProcess == null)
+            {
+                return;
+            }
 
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 Thread.Sleep(5000);
                 // Calling Close can block up to 60 seconds on certain machines
-                if (!endedProcess.HasExited) endedProcess.Close();
+                if (!endedProcess.HasExited)
+                {
+                    endedProcess.Close();
+                }
             });
         }
 
@@ -259,20 +286,24 @@ namespace Oxide.Plugins
 
             compilation.Started();
             //Interface.Oxide.LogDebug("Compiling with references: {0}", compilation.references.Keys.ToSentence());
-            var sourceFiles = compilation.plugins.SelectMany(plugin => plugin.IncludePaths).Distinct().Select(path => new CompilerFile(path)).ToList();
+            List<CompilerFile> sourceFiles = compilation.plugins.SelectMany(plugin => plugin.IncludePaths).Distinct().Select(path => new CompilerFile(path)).ToList();
             sourceFiles.AddRange(compilation.plugins.Select(plugin => new CompilerFile($"{plugin.ScriptName}.cs", plugin.ScriptSource)));
             //Interface.Oxide.LogDebug("Compiling files: {0}", sourceFiles.Select(f => f.Name).ToSentence());
-            var data = new CompilerData
+            CompilerData data = new CompilerData
             {
                 OutputFile = compilation.name,
                 SourceFiles = sourceFiles.ToArray(),
                 ReferenceFiles = compilation.references.Values.ToArray()
             };
-            var message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
+            CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
             if (ready)
+            {
                 client.PushMessage(message);
+            }
             else
+            {
                 messageQueue.Enqueue(message);
+            }
         }
 
         private void OnMessage(ObjectStreamConnection<CompilerMessage, CompilerMessage> connection, CompilerMessage message)
@@ -291,36 +322,44 @@ namespace Oxide.Plugins
             switch (message.Type)
             {
                 case CompilerMessageType.Assembly:
-                    var compilation = compilations[message.Id];
+                    Compilation compilation = compilations[message.Id];
                     if (compilation == null)
                     {
                         Interface.Oxide.LogWarning("Compiler compiled an unknown assembly"); // TODO: Any way to clarify this?
                         return;
                     }
                     compilation.endedAt = Interface.Oxide.Now;
-                    var stdOutput = (string)message.ExtraData;
+                    string stdOutput = (string)message.ExtraData;
                     if (stdOutput != null)
                     {
-                        foreach (var line in stdOutput.Split('\r', '\n'))
+                        foreach (string line in stdOutput.Split('\r', '\n'))
                         {
-                            var match = fileErrorRegex.Match(line.Trim());
-                            for (var i = 1; i < match.Groups.Count; i++)
+                            Match match = fileErrorRegex.Match(line.Trim());
+                            for (int i = 1; i < match.Groups.Count; i++)
                             {
-                                var value = match.Groups[i].Value;
-                                if (value.Trim() == string.Empty) continue;
-                                var fileName = value.Basename();
-                                var scriptName = fileName.Substring(0, fileName.Length - 3);
-                                var compilablePlugin = compilation.plugins.SingleOrDefault(pl => pl.ScriptName == scriptName);
+                                string value = match.Groups[i].Value;
+                                if (value.Trim() == string.Empty)
+                                {
+                                    continue;
+                                }
+
+                                string fileName = value.Basename();
+                                string scriptName = fileName.Substring(0, fileName.Length - 3);
+                                CompilablePlugin compilablePlugin = compilation.plugins.SingleOrDefault(pl => pl.ScriptName == scriptName);
                                 if (compilablePlugin == null)
                                 {
                                     Interface.Oxide.LogError($"Unable to resolve script error to plugin: {line}");
                                     continue;
                                 }
-                                var missingRequirements = compilablePlugin.Requires.Where(name => !compilation.IncludesRequiredPlugin(name));
+                                IEnumerable<string> missingRequirements = compilablePlugin.Requires.Where(name => !compilation.IncludesRequiredPlugin(name));
                                 if (missingRequirements.Any())
+                                {
                                     compilablePlugin.CompilerErrors = $"Missing dependencies: {missingRequirements.ToSentence()}";
+                                }
                                 else
+                                {
                                     compilablePlugin.CompilerErrors = line.Trim().Replace(Interface.Oxide.PluginDirectory + Path.DirectorySeparatorChar, string.Empty);
+                                }
                             }
                         }
                     }
@@ -332,7 +371,10 @@ namespace Oxide.Plugins
                         Interface.Oxide.NextTick(() =>
                         {
                             idleTimer?.Destroy();
-                            if (AutoShutdown) idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(60, Shutdown);
+                            if (AutoShutdown)
+                            {
+                                idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(60, Shutdown);
+                            }
                         });
                     }
                     break;
@@ -357,7 +399,10 @@ namespace Oxide.Plugins
                     if (!ready)
                     {
                         ready = true;
-                        while (messageQueue.Count > 0) connection.PushMessage(messageQueue.Dequeue());
+                        while (messageQueue.Count > 0)
+                        {
+                            connection.PushMessage(messageQueue.Dequeue());
+                        }
                     }
                     break;
             }
@@ -370,14 +415,21 @@ namespace Oxide.Plugins
             CheckCompilerBinary();
             idleTimer?.Destroy();
 
-            if (BinaryPath == null) return false;
-            if (process != null && process.Handle != IntPtr.Zero && !process.HasExited) return true;
+            if (BinaryPath == null)
+            {
+                return false;
+            }
+
+            if (process != null && process.Handle != IntPtr.Zero && !process.HasExited)
+            {
+                return true;
+            }
 
             SetCompilerVersion();
             PurgeOldLogs();
             Shutdown();
 
-            var args = new[] { "/service", "/logPath:" + EscapePath(Interface.Oxide.LogDirectory) };
+            string[] args = new[] { "/service", "/logPath:" + EscapePath(Interface.Oxide.LogDirectory) };
             try
             {
                 process = new Process
@@ -418,14 +470,31 @@ namespace Oxide.Plugins
                 process?.Dispose();
                 process = null;
                 Interface.Oxide.LogException($"Exception while starting compiler version {CompilerVersion}: ", ex);
-                if (BinaryPath.Contains("'")) Interface.Oxide.LogWarning("Server directory path contains an apostrophe, compiler will not work until path is renamed");
-                else if (Environment.OSVersion.Platform == PlatformID.Unix) Interface.Oxide.LogWarning("Compiler may not be set as executable; chmod +x or 0744/0755 required");
-                if (ex.GetBaseException() != ex) Interface.Oxide.LogException("BaseException: ", ex.GetBaseException());
-                var win32 = ex as Win32Exception;
-                if (win32 != null) Interface.Oxide.LogError("Win32 NativeErrorCode: {0} ErrorCode: {1} HelpLink: {2}", win32.NativeErrorCode, win32.ErrorCode, win32.HelpLink);
+                if (BinaryPath.Contains("'"))
+                {
+                    Interface.Oxide.LogWarning("Server directory path contains an apostrophe, compiler will not work until path is renamed");
+                }
+                else if (Environment.OSVersion.Platform == PlatformID.Unix)
+                {
+                    Interface.Oxide.LogWarning("Compiler may not be set as executable; chmod +x or 0744/0755 required");
+                }
+
+                if (ex.GetBaseException() != ex)
+                {
+                    Interface.Oxide.LogException("BaseException: ", ex.GetBaseException());
+                }
+
+                Win32Exception win32 = ex as Win32Exception;
+                if (win32 != null)
+                {
+                    Interface.Oxide.LogError("Win32 NativeErrorCode: {0} ErrorCode: {1} HelpLink: {2}", win32.NativeErrorCode, win32.ErrorCode, win32.HelpLink);
+                }
             }
 
-            if (process == null) return false;
+            if (process == null)
+            {
+                return false;
+            }
 
             client = new ObjectStreamClient<CompilerMessage>(process.StandardOutput.BaseStream, process.StandardInput.BaseStream);
             client.Message += OnMessage;
@@ -499,9 +568,13 @@ namespace Oxide.Plugins
 
         private void OnCompilerFailed(string reason)
         {
-            foreach (var compilation in compilations.Values)
+            foreach (Compilation compilation in compilations.Values)
             {
-                foreach (var plugin in compilation.plugins) plugin.CompilerErrors = reason;
+                foreach (CompilablePlugin plugin in compilation.plugins)
+                {
+                    plugin.CompilerErrors = reason;
+                }
+
                 compilation.Completed();
             }
             compilations.Clear();
@@ -511,12 +584,15 @@ namespace Oxide.Plugins
         {
             try
             {
-                var filePaths = Directory.GetFiles(Interface.Oxide.LogDirectory, "*.txt").Where(f =>
+                IEnumerable<string> filePaths = Directory.GetFiles(Interface.Oxide.LogDirectory, "*.txt").Where(f =>
                 {
-                    var fileName = Path.GetFileName(f);
+                    string fileName = Path.GetFileName(f);
                     return fileName != null && fileName.StartsWith("compiler_");
                 });
-                foreach (var filePath in filePaths) File.Delete(filePath);
+                foreach (string filePath in filePaths)
+                {
+                    File.Delete(filePath);
+                }
             }
             catch (Exception)
             {
@@ -526,7 +602,10 @@ namespace Oxide.Plugins
 
         private static string EscapePath(string path)
         {
-            if (string.IsNullOrEmpty(path)) return "\"\"";
+            if (string.IsNullOrEmpty(path))
+            {
+                return "\"\"";
+            }
 
             path = Regex.Replace(path, @"(\\*)" + "\"", @"$1\$0");
             path = Regex.Replace(path, @"^(.*\s.*?)(\\*)$", "\"$1$2$2\"");
@@ -545,9 +624,9 @@ namespace Oxide.Plugins
 
         private static string GetHash(string filePath, HashAlgorithm algorithm)
         {
-            using (var stream = new BufferedStream(File.OpenRead(filePath), 100000))
+            using (BufferedStream stream = new BufferedStream(File.OpenRead(filePath), 100000))
             {
-                var hash = algorithm.ComputeHash(stream);
+                byte[] hash = algorithm.ComputeHash(stream);
                 return BitConverter.ToString(hash).Replace("-", string.Empty).ToLower();
             }
         }

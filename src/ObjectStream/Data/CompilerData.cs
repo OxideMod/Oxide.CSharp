@@ -14,6 +14,7 @@ namespace ObjectStream.Data
             LoadDefaultReferences = false;
             SdkVersion = "2";
         }
+
         public bool LoadDefaultReferences { get; set; }
         public string OutputFile { get; set; }
         public CompilerPlatform Platform { get; set; }

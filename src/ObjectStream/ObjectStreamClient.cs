@@ -34,7 +34,7 @@ namespace ObjectStream
 
         public void Start()
         {
-            var worker = new Worker();
+            Worker worker = new Worker();
             worker.Error += OnError;
             worker.DoWork(ListenSync);
         }
@@ -42,13 +42,17 @@ namespace ObjectStream
         public void PushMessage(TWrite message)
         {
             if (_connection != null)
+            {
                 _connection.PushMessage(message);
+            }
         }
 
         public void Stop()
         {
             if (_connection != null)
+            {
                 _connection.Close();
+            }
         }
 
         #region Private methods
@@ -65,7 +69,9 @@ namespace ObjectStream
         private void OnReceiveMessage(ObjectStreamConnection<TRead, TWrite> connection, TRead message)
         {
             if (Message != null)
+            {
                 Message(connection, message);
+            }
         }
 
         private void ConnectionOnError(ObjectStreamConnection<TRead, TWrite> connection, Exception exception)
@@ -76,7 +82,9 @@ namespace ObjectStream
         private void OnError(Exception exception)
         {
             if (Error != null)
+            {
                 Error(exception);
+            }
         }
 
         #endregion Private methods
