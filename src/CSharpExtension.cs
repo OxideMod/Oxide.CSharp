@@ -80,13 +80,11 @@ namespace Oxide.Plugins
 
                 string extDir = Interface.Oxide.ExtensionDirectory;
                 string configPath = Path.Combine(extDir, "Oxide.References.dll.config");
-                if (File.Exists(configPath) && !(new[] { "target=\"x64", "target=\"./x64" }.Any(File.ReadAllText(configPath).Contains)))
+                if (!File.Exists(configPath) || (new[] { "target=\"x64", "target=\"./x64" }.Any(File.ReadAllText(configPath).Contains)))
                 {
-                    return;
+                    File.WriteAllText(configPath, $"<configuration>\n<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x86/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"32\" />\n" +
+                        $"<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x64/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"64\" />\n</configuration>");
                 }
-
-                File.WriteAllText(configPath, $"<configuration>\n<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x86/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"32\" />\n" +
-                    $"<dllmap dll=\"MonoPosixHelper\" target=\"{extDir}/x64/libMonoPosixHelper.so\" os=\"!windows,osx\" wordsize=\"64\" />\n</configuration>");
             }
             else
             {
