@@ -125,17 +125,23 @@ namespace Oxide.Plugins
             TraceRan = true;
         }
 
-        private static void DownloadCompiler(WebResponse response, string remoteHash)
+        private static void DownloadCompiler(string remoteHash)
         {
             try
             {
                 Interface.Oxide.LogInfo($"Downloading {FileName} for .cs (C#) plugin compilation");
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://assets.umod.org/compiler/{FileName}");
+                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                int statusCode = (int)response.StatusCode;
+                if (statusCode != 200)
+                {
+                    Interface.Oxide.LogWarning($"Status code for compiler download was not okay (code {statusCode})");
+                }
 
-                Stream stream = response.GetResponseStream();
                 FileStream fs = new FileStream(FileName, FileMode.Create, FileAccess.Write, FileShare.None);
+                Stream stream = response.GetResponseStream();
                 int bufferSize = 10000;
                 byte[] buffer = new byte[bufferSize];
-
                 while (true)
                 {
                     int result = stream.Read(buffer, 0, bufferSize);
@@ -151,18 +157,18 @@ namespace Oxide.Plugins
                 stream.Close();
                 response.Close();
 
-                if (downloadRetries >= 3)
+                if (downloadRetries >= 2)
                 {
-                    Interface.Oxide.LogInfo($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Oxide.CSharp/releases/download/latest/{FileName}");
+                    Interface.Oxide.LogInfo($"Couldn not download {FileName}! Please download manually from: https://assets.umod.org/compiler/{FileName}");
                     return;
                 }
 
                 string localHash = File.Exists(BinaryPath) ? GetHash(BinaryPath, Algorithms.MD5) : "0";
                 if (remoteHash != localHash)
                 {
-                    Interface.Oxide.LogInfo($"Local hash did not match remote hash for {FileName}, attempting download again");
-                    UpdateCheck();
+                    Interface.Oxide.LogInfo($"Local MD5 hash did not match remote MD5 hash for {FileName}, attempting download again");
                     downloadRetries++;
+                    UpdateCheck();
                     return;
                 }
 
@@ -170,7 +176,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Couldn't download {FileName}! Please download manually from: https://github.com/OxideMod/Oxide.CSharp/releases/download/latest/{FileName}");
+                Interface.Oxide.LogError($"Could not download {FileName}! Please download manually from: https://assets.umod.org/compiler/{FileName}");
                 Interface.Oxide.LogError(ex.Message);
             }
         }
@@ -180,27 +186,36 @@ namespace Oxide.Plugins
             try
             {
                 string filePath = Path.Combine(Interface.Oxide.RootDirectory, FileName);
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://umod-01.nyc3.digitaloceanspaces.com/{FileName}");
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://assets.umod.org/compiler/{FileName}.md5");
                 HttpWebResponse response = (HttpWebResponse)request.GetResponse();
                 int statusCode = (int)response.StatusCode;
                 if (statusCode != 200)
                 {
-                    Interface.Oxide.LogWarning($"Status code from download location was not okay (code {statusCode})");
+                    Interface.Oxide.LogWarning($"Status code for compiler update check was not okay (code {statusCode})");
                 }
 
-                string remoteHash = response.Headers[HttpResponseHeader.ETag].Trim('"');
-                string localHash = File.Exists(filePath) ? GetHash(filePath, Algorithms.MD5) : "0";
-                Interface.Oxide.LogInfo($"Latest compiler MD5: {remoteHash}");
-                Interface.Oxide.LogInfo($"Local compiler MD5: {localHash}");
+                string remoteHash = "0";
+                string localHash = "0";
+                Stream stream = response.GetResponseStream();
+                using (StreamReader reader = new StreamReader(stream))
+                {
+                    remoteHash = reader.ReadToEnd().Trim().ToLowerInvariant();
+                    localHash = File.Exists(filePath) ? GetHash(filePath, Algorithms.MD5) : "0";
+                    Interface.Oxide.LogInfo($"Latest compiler MD5: {remoteHash}");
+                    Interface.Oxide.LogInfo($"Local compiler MD5: {localHash}");
+                }
+                stream.Close();
+                response.Close();
+
                 if (remoteHash != localHash)
                 {
-                    Interface.Oxide.LogInfo("Compiler hashes did not match, downloading latest");
-                    DownloadCompiler(response, remoteHash);
+                    Interface.Oxide.LogInfo("Compiler MD5 hash did not match, downloading latest");
+                    DownloadCompiler(remoteHash);
                 }
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Couldn't check for update to {FileName}");
+                Interface.Oxide.LogError($"Could not check for update to {FileName}");
                 Interface.Oxide.LogError(ex.Message);
             }
         }
