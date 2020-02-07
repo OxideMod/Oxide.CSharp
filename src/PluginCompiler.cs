@@ -541,7 +541,7 @@ namespace Oxide.Plugins
                         Interface.Oxide.LogWarning($"Compiler under user/group: {compilerFileInfo.OwnerUser}/{compilerFileInfo.OwnerGroup}");
 
                         string depPath = Path.Combine(Interface.Oxide.ExtensionDirectory, IntPtr.Size == 8 ? "x64" : "x86");
-                        string[] depFiles = { "libmonoboehm-2.0.so.1", "libMonoPosixHelper.so", "mono-2.0.dll" };
+                        string[] depFiles = { "libmonoboehm-2.0.so.1", "libMonoPosixHelper.so" };
                         foreach (string file in depFiles)
                         {
                             string filePath = Path.Combine(depPath, file);
