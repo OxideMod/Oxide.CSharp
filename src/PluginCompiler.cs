@@ -634,7 +634,6 @@ namespace Oxide.Plugins
             public static readonly HashAlgorithm SHA256 = new SHA256Managed();
             public static readonly HashAlgorithm SHA384 = new SHA384Managed();
             public static readonly HashAlgorithm SHA512 = new SHA512Managed();
-            public static readonly HashAlgorithm RIPEMD160 = new RIPEMD160Managed();
         }
 
         private static string GetHash(string filePath, HashAlgorithm algorithm)
