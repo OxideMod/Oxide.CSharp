@@ -130,7 +130,7 @@ namespace Oxide.Plugins
             try
             {
                 Interface.Oxide.LogInfo($"Downloading {FileName} for .cs (C#) plugin compilation");
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://assets.umod.org/compiler/{FileName}");
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://umod.cloud/compiler/{FileName}");
                 HttpWebResponse response = (HttpWebResponse)request.GetResponse();
                 int statusCode = (int)response.StatusCode;
                 if (statusCode != 200)
@@ -159,7 +159,7 @@ namespace Oxide.Plugins
 
                 if (downloadRetries >= 2)
                 {
-                    Interface.Oxide.LogInfo($"Couldn not download {FileName}! Please download manually from: https://assets.umod.org/compiler/{FileName}");
+                    Interface.Oxide.LogInfo($"Couldn not download {FileName}! Please download manually from: https://umod.cloud/compiler/{FileName}");
                     return;
                 }
 
@@ -186,7 +186,7 @@ namespace Oxide.Plugins
             try
             {
                 string filePath = Path.Combine(Interface.Oxide.RootDirectory, FileName);
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://assets.umod.org/compiler/{FileName}.md5");
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"https://umod.cloud/compiler/{FileName}.md5");
                 HttpWebResponse response = (HttpWebResponse)request.GetResponse();
                 int statusCode = (int)response.StatusCode;
                 if (statusCode != 200)
