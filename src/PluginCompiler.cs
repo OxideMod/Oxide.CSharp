@@ -176,7 +176,7 @@ namespace Oxide.Plugins
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Could not download {FileName}! Please download manually from: https://assets.umod.org/compiler/{FileName}");
+                Interface.Oxide.LogError($"Could not download {FileName}! Please download manually from: https://umod.cloud/compiler/{FileName}");
                 Interface.Oxide.LogError(ex.Message);
             }
         }

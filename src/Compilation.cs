@@ -122,12 +122,18 @@ namespace Oxide.Plugins
                     {
                         if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".dll")))
                         {
+#if DEBUG
+                            Interface.Oxide.LogDebug($"Added default reference: {filename}");
+#endif
                             references[filename + ".dll"] = new CompilerFile(Interface.Oxide.ExtensionDirectory, filename + ".dll");
                         }
 
                         if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".exe")))
                         {
-                            references[filename + ".exe"] = new CompilerFile(Interface.Oxide.ExtensionDirectory, filename + ".exe");
+#if DEBUG
+                            Interface.Oxide.LogDebug($"Added default reference: {filename}");
+#endif
+                            references[filename + ".exe"] = new CompilerFile(Interface.Oxide.RootDirectory, filename + ".exe");
                         }
                     }
 
@@ -414,6 +420,9 @@ namespace Oxide.Plugins
                 references[filename] = new CompilerFile(Interface.Oxide.ExtensionDirectory, filename);
             }
 
+#if DEBUG
+            Interface.Oxide.LogWarning($"{reference.Name} has been added as a reference");
+#endif
             plugin.References.Add(reference.Name);
         }
 
