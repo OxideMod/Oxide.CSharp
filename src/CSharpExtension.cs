@@ -44,7 +44,7 @@ namespace Oxide.Plugins
         private CSharpPluginLoader loader;
 
         // Is the sandbox enabled? (always default to true)
-        public static bool SandboxEnabled = true;
+        public static bool SandboxEnabled { get; private set; } = true;
 
         /// <summary>
         /// Initializes a new instance of the CSharpExtension class
