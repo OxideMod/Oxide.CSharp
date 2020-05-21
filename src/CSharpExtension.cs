@@ -1,4 +1,4 @@
-﻿using Oxide.Core;
+using Oxide.Core;
 using Oxide.Core.Extensions;
 using Oxide.Core.Plugins.Watchers;
 using System;
@@ -43,6 +43,9 @@ namespace Oxide.Plugins
         // The .cs plugin loader
         private CSharpPluginLoader loader;
 
+        // Is the sandbox enabled? (always default to true)
+        public static bool SandboxEnabled { get; private set; } = true;
+
         /// <summary>
         /// Initializes a new instance of the CSharpExtension class
         /// </summary>
@@ -72,6 +75,12 @@ namespace Oxide.Plugins
 
             // Register engine frame callback
             Interface.Oxide.OnFrame(OnFrame);
+
+            if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, "oxide.disable-sandbox")))
+            {
+                Interface.Oxide.LogWarning($"{Path.Combine(Interface.Oxide.ExtensionDirectory, "oxide.disable-sandbox")} found, disabling security sandbox. Potentially dangerous APIs and methods are now allowed inside plugins.");
+                CSharpExtension.SandboxEnabled = false;
+            }
         }
 
         /// <summary>
