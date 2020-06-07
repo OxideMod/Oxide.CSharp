@@ -1,4 +1,4 @@
-﻿using ObjectStream.Data;
+using ObjectStream.Data;
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
@@ -262,8 +262,8 @@ namespace Oxide.Plugins
                 if (match.Success)
                 {
                     string result = match.Groups[1].Value;
-                    if (!result.StartsWith("Oxide.") && !result.Contains("Harmony") && !result.Contains("Newtonsoft.Json")
-                        && !result.Contains("protobuf-net") && !result.StartsWith("Rust."))
+                    if (!result.StartsWith("Oxide.") && !result.Contains("Newtonsoft.Json")&& !result.Contains("protobuf-net")
+                        || !CSharpExtension.SandboxEnabled && !result.Contains("Harmony"))
                     {
                         AddReference(plugin, result);
                         Interface.Oxide.LogInfo("Added '// Reference: {0}' in plugin '{1}'", result, plugin.Name);
