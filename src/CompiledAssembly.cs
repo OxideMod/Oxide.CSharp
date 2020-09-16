@@ -41,7 +41,7 @@ namespace Oxide.Plugins
 
         private static IEnumerable<string> WhitelistedNamespaces => new[] {
             "System.Diagnostics.Stopwatch", "System.IO.MemoryStream", "System.IO.Stream", "System.IO.BinaryReader", "System.IO.BinaryWriter", "System.IO.StringReader",
-            "System.Net.Dns", "System.Net.Dns.GetHostEntry", "System.Net.IPAddress", "System.Net.IPEndPoint", "System.Net.NetworkInformation",
+            "System.IO.StringWriter", "System.Net.Dns", "System.Net.Dns.GetHostEntry", "System.Net.IPAddress", "System.Net.IPEndPoint", "System.Net.NetworkInformation",
             "System.Net.Sockets.SocketFlags", "System.Security.Cryptography", "System.Threading.Interlocked", "System.Threading.Monitor"
         };
 
