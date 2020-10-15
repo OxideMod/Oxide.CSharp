@@ -169,13 +169,8 @@ namespace Oxide.Plugins
                                 Instruction first = instructions.First();
 
                                 int i = 0;
-                                while (i < instructions.Count)
+                                while (i < instructions.Count && !changedMethod)
                                 {
-                                    if (changedMethod)
-                                    {
-                                        break;
-                                    }
-
                                     Instruction instruction = instructions[i];
                                     if (instruction.OpCode == OpCodes.Ldtoken)
                                     {
@@ -189,7 +184,7 @@ namespace Oxide.Plugins
                                             changedMethod = true;
                                         }
                                     }
-                                    else if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Calli || instruction.OpCode == OpCodes.Callvirt || instruction.OpCode == OpCodes.Ldftn)
+                                    else if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Calli || instruction.OpCode == OpCodes.Callvirt || instruction.OpCode == OpCodes.Ldftn || instruction.OpCode == OpCodes.Newobj)
                                     {
                                         MethodReference methodCall = instruction.Operand as MethodReference;
                                         string fullNamespace = methodCall?.DeclaringType.FullName;
