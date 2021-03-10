@@ -197,6 +197,15 @@ namespace Oxide.Plugins
             for (int i = 0; i < plugin.ScriptLines.Length; i++)
             {
                 string line = plugin.ScriptLines[i].Trim();
+                
+                if (line.IndexOf("namespace uMod.Plugins", StringComparison.InvariantCultureIgnoreCase) >= 0)
+                {
+                    Interface.Oxide.LogError($"Plugin {plugin.ScriptName}.cs is a uMod plugin, not an Oxide plugin. Please downgrade to the Oxide version if available.");
+                    plugin.CompilerErrors = $"Plugin {plugin.ScriptName}.cs is a uMod plugin, not an Oxide plugin. Please downgrade to the Oxide version if available.";
+                    RemovePlugin(plugin);
+                    return;
+                }
+                
                 if (line.Length < 1)
                 {
                     continue;
