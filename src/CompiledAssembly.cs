@@ -131,7 +131,7 @@ namespace Oxide.Plugins
 
                             if (method.Body == null)
                             {
-                                if (method.HasPInvokeInfo && CSharpExtension.SandboxEnabled)
+                                if (method.HasPInvokeInfo)
                                 {
                                     method.Attributes &= ~MethodAttributes.PInvokeImpl;
                                     MethodBody body = new MethodBody(method);
@@ -237,7 +237,10 @@ namespace Oxide.Plugins
 
                     foreach (TypeDefinition type in definition.MainModule.Types)
                     {
-                        patchModuleType(type);
+                        if (CSharpExtension.SandboxEnabled)
+                        {
+                            patchModuleType(type);
+                        }
 
                         if (IsCompilerGenerated(type))
                         {
@@ -335,11 +338,6 @@ namespace Oxide.Plugins
 
         private static bool IsNamespaceBlacklisted(string fullNamespace)
         {
-            if (!CSharpExtension.SandboxEnabled)
-            {
-                return false;
-            }
-
             foreach (string namespaceName in BlacklistedNamespaces)
             {
                 if (!fullNamespace.StartsWith(namespaceName))
