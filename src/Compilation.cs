@@ -340,7 +340,7 @@ namespace Oxide.Plugins
                     }
                 }
 
-                string message = $"{fullName} is referenced by {plugin.Name} plugin but is not loaded! An appropriate include file needs to be saved to plugins\\include\\Ext.{name}.cs if this extension is not required.";
+                string message = $"{fullName} is referenced by {plugin.Name} plugin but is not loaded";
                 Interface.Oxide.LogError(message);
                 plugin.CompilerErrors = message;
                 RemovePlugin(plugin);
