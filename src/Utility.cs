@@ -18,6 +18,11 @@ namespace Oxide.Plugins
             dictionary = new Dictionary<TKey, TValue>();
         }
 
+        public Hash(IEqualityComparer<TKey> comparer)
+        {
+            dictionary = new Dictionary<TKey, TValue>(comparer);
+        }
+
         public TValue this[TKey key]
         {
             get
