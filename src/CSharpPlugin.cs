@@ -1,4 +1,4 @@
-﻿using Oxide.Core;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using Oxide.Core.Plugins.Watchers;
@@ -469,7 +469,7 @@ namespace Oxide.Plugins
             filename = $"{plugin.Name.ToLower()}_{filename.ToLower()}{(timeStamp ? $"-{DateTime.Now:yyyy-MM-dd}" : "")}.txt";
             using (StreamWriter writer = new StreamWriter(Path.Combine(path, Utility.CleanPath(filename)), true))
             {
-                writer.WriteLine(text);
+                writer.WriteLine(timeStamp ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {text}" : text);
             }
         }
 
