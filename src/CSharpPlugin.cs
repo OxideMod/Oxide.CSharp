@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 
 namespace Oxide.Plugins
@@ -451,14 +452,17 @@ namespace Oxide.Plugins
             Interface.Oxide.LogError("[{0}] {1}", Title, args.Length > 0 ? string.Format(format, args) : format);
         }
 
+        private static readonly object _logFileLock = new object();
+
         /// <summary>
         /// Logs a string of text to a named file
         /// </summary>
         /// <param name="filename"></param>
         /// <param name="text"></param>
         /// <param name="plugin"></param>
-        /// <param name="timeStamp"></param>
-        protected void LogToFile(string filename, string text, Plugin plugin, bool timeStamp = true)
+        /// <param name="datedFilename"></param>
+        /// <param name="timestampPrefix"></param>
+        protected void LogToFile(string filename, string text, Plugin plugin, bool datedFilename = true, bool timestampPrefix = false)
         {
             string path = Path.Combine(Interface.Oxide.LogDirectory, plugin.Name);
             if (!Directory.Exists(path))
@@ -466,10 +470,15 @@ namespace Oxide.Plugins
                 Directory.CreateDirectory(path);
             }
 
-            filename = $"{plugin.Name.ToLower()}_{filename.ToLower()}{(timeStamp ? $"-{DateTime.Now:yyyy-MM-dd}" : "")}.txt";
-            using (StreamWriter writer = new StreamWriter(Path.Combine(path, Utility.CleanPath(filename)), true))
+            filename = $"{plugin.Name.ToLower()}_{filename.ToLower()}{(datedFilename ? $"-{DateTime.Now:yyyy-MM-dd}" : "")}.txt";
+
+            lock (_logFileLock)
             {
-                writer.WriteLine(timeStamp ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {text}" : text);
+                using (FileStream file = new FileStream(Path.Combine(path, Utility.CleanPath(filename)), FileMode.Append, FileAccess.Write, FileShare.Read))
+                using (StreamWriter writer = new StreamWriter(file, Encoding.Unicode))
+                {
+                    writer.Write(timestampPrefix ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {text}" : text);
+                }
             }
         }
 
@@ -499,7 +508,7 @@ namespace Oxide.Plugins
                 }
                 catch (Exception ex)
                 {
-                    RaiseError($"Exception in '{Name} v{Version}' plugin worker thread: {ex.ToString()}");
+                    RaiseError($"Exception in '{Name} v{Version}' plugin worker thread: {ex}");
                 }
             });
         }
