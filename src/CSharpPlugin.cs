@@ -385,7 +385,7 @@ namespace Oxide.Plugins
                     CompilablePlugin compilablePlugin = CSharpPluginLoader.GetCompilablePlugin(Interface.Oxide.PluginDirectory, Name);
                     if (compilablePlugin?.CompiledAssembly != null)
                     {
-                        File.WriteAllBytes(Interface.Oxide.PluginDirectory + "\\" + Name + ".dump", compilablePlugin.CompiledAssembly.PatchedAssembly);
+                        File.WriteAllBytes(Interface.Oxide.PluginDirectory + "\\" + Name + ".dump", compilablePlugin.CompiledAssembly.RawAssembly);
                         Interface.Oxide.LogWarning($"The invalid raw assembly has been dumped to Plugins/{Name}.dump");
                     }
                     hookDispatchFallback = true;
