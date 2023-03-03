@@ -423,6 +423,11 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
+        /// Print an object as a message using the oxide root logger
+        /// </summary>
+        /// <param name="format"></param>
+        protected void Puts(object format) => Puts(format.ToString());
+        /// <summary>
         /// Print an info message using the oxide root logger
         /// </summary>
         /// <param name="format"></param>
