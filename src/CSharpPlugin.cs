@@ -477,7 +477,7 @@ namespace Oxide.Plugins
                 using (FileStream file = new FileStream(Path.Combine(path, Utility.CleanPath(filename)), FileMode.Append, FileAccess.Write, FileShare.Read))
                 using (StreamWriter writer = new StreamWriter(file, Encoding.Unicode))
                 {
-                    writer.Write(timestampPrefix ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {text}" : text);
+                    writer.WriteLine(timestampPrefix ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {text}" : text);
                 }
             }
         }
