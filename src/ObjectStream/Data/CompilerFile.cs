@@ -4,7 +4,7 @@ using System.IO;
 namespace ObjectStream.Data
 {
     [Serializable]
-    internal class CompilerFile
+    public class CompilerFile
     {
         public string Name { get; set; }
         public byte[] Data { get; set; }

@@ -3,7 +3,7 @@ using System;
 namespace ObjectStream.Data
 {
     [Serializable]
-    internal enum CompilerTarget
+    public enum CompilerTarget
     {
         Library, Exe, Module, WinExe
     }

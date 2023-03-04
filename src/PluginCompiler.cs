@@ -12,6 +12,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -39,22 +40,24 @@ namespace Oxide.Plugins
                 BinaryPath = binaryPath;
                 return;
             }
-
+            string arc = IntPtr.Size == 8 ? "64" : "86";
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
                 case PlatformID.Win32S:
                 case PlatformID.Win32Windows:
-                    FileName = "Compiler.exe";
+                    FileName = $"Oxide.Compiler-winx{arc}.exe";
                     binaryPath = Path.Combine(rootDirectory, FileName);
-                    UpdateCheck();
+                    DownloadCompiler();
+                    SetCompilerVersion();
                     break;
 
                 case PlatformID.Unix:
                 case PlatformID.MacOSX:
-                    FileName = $"Compiler.{(IntPtr.Size != 8 ? "x86" : "x86_x64")}";
+                    FileName = $"Oxide.Compiler-linux_x{arc}";
                     binaryPath = Path.Combine(rootDirectory, FileName);
-                    UpdateCheck();
+                    DownloadCompiler();
+                    SetCompilerVersion();
                     try
                     {
                         if (Syscall.access(binaryPath, AccessModes.X_OK) == 0)
@@ -125,17 +128,32 @@ namespace Oxide.Plugins
             TraceRan = true;
         }
 
-        private static void DownloadCompiler(string remoteHash)
+        private static void DownloadCompiler()
         {
             try
             {
                 Interface.Oxide.LogInfo($"Downloading {FileName} for .cs (C#) plugin compilation");
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"http://umod.cloud/compiler/{FileName}");
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"http://s3.us-west-1.amazonaws.com/s3.vandersluis.club/oxide.compiler/{FileName}");
+
+                if (BinaryPath != null && File.Exists(BinaryPath))
+                {
+                    request.IfModifiedSince = File.GetCreationTimeUtc(BinaryPath);
+                }
+
                 HttpWebResponse response = (HttpWebResponse)request.GetResponse();
                 int statusCode = (int)response.StatusCode;
-                if (statusCode != 200)
+                switch (statusCode)
                 {
-                    Interface.Oxide.LogWarning($"Status code for compiler download was not okay (code {statusCode})");
+                    case 304:
+                        Interface.Oxide.LogInfo("Compiler is already up to date");
+                        break;
+
+                    case 200:
+                        break;
+
+                    default:
+                        Interface.Oxide.LogWarning($"Status code for compiler download was not okay (code {statusCode})");
+                        break;
                 }
 
                 FileStream fs = new FileStream(FileName, FileMode.Create, FileAccess.Write, FileShare.None);
@@ -163,59 +181,26 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                string localHash = File.Exists(BinaryPath) ? GetHash(BinaryPath, Algorithms.MD5) : "0";
-                if (remoteHash != localHash)
-                {
-                    Interface.Oxide.LogInfo($"Local MD5 hash did not match remote MD5 hash for {FileName}, attempting download again");
-                    downloadRetries++;
-                    UpdateCheck();
-                    return;
-                }
-
                 Interface.Oxide.LogInfo($"Download of {FileName} completed successfully");
+            }
+            catch (WebException webex)
+            {
+                if (webex.Response != null)
+                {
+                    HttpWebResponse r = (HttpWebResponse)webex.Response;
+                    switch (r.StatusCode)
+                    {
+                        case HttpStatusCode.NotModified:
+                            Interface.Oxide.LogInfo("Compiler is already up to date");
+                            break;
+                        default:
+                            throw;
+                    }
+                }
             }
             catch (Exception ex)
             {
                 Interface.Oxide.LogError($"Could not download {FileName}! Please download manually from: http://umod.cloud/compiler/{FileName}");
-                Interface.Oxide.LogError(ex.Message);
-            }
-        }
-
-        private static void UpdateCheck()
-        {
-            try
-            {
-                string filePath = Path.Combine(Interface.Oxide.RootDirectory, FileName);
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"http://umod.cloud/compiler/{FileName}.md5");
-                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                int statusCode = (int)response.StatusCode;
-                if (statusCode != 200)
-                {
-                    Interface.Oxide.LogWarning($"Status code for compiler update check was not okay (code {statusCode})");
-                }
-
-                string remoteHash = "0";
-                string localHash = "0";
-                Stream stream = response.GetResponseStream();
-                using (StreamReader reader = new StreamReader(stream))
-                {
-                    remoteHash = reader.ReadToEnd().Trim().ToLowerInvariant();
-                    localHash = File.Exists(filePath) ? GetHash(filePath, Algorithms.MD5) : "0";
-                    Interface.Oxide.LogInfo($"Latest compiler MD5: {remoteHash}");
-                    Interface.Oxide.LogInfo($"Local compiler MD5: {localHash}");
-                }
-                stream.Close();
-                response.Close();
-
-                if (remoteHash != localHash)
-                {
-                    Interface.Oxide.LogInfo("Compiler MD5 hash did not match, downloading latest");
-                    DownloadCompiler(remoteHash);
-                }
-            }
-            catch (Exception ex)
-            {
-                Interface.Oxide.LogError($"Could not check for update to {FileName}");
                 Interface.Oxide.LogError(ex.Message);
             }
         }
@@ -378,7 +363,8 @@ namespace Oxide.Plugins
                             }
                         }
                     }
-                    compilation.Completed((byte[])message.Data);
+                    CompilationResult result = (CompilationResult)message.Data;
+                    compilation.Completed(result.Data, result.Symbols);
                     compilations.Remove(message.Id);
                     idleTimer?.Destroy();
                     if (AutoShutdown)
@@ -444,7 +430,13 @@ namespace Oxide.Plugins
             PurgeOldLogs();
             Shutdown();
 
-            string[] args = new[] { "/service", "/logPath:" + EscapePath(Interface.Oxide.LogDirectory) };
+            string logName = Path.Combine(Interface.Oxide.LogDirectory, $"compiler_{DateTime.Now.ToString("yyyyMMdd")}.log");
+
+#if DEBUG
+            string[] args = new[] { "/debug", "/logPath", EscapePath(logName) };
+#else
+            string[] args = new[] { "/logPath", EscapePath(logName) };
+#endif
             try
             {
                 process = new Process
@@ -478,6 +470,7 @@ namespace Oxide.Plugins
                         break;
                 }
                 process.Exited += OnProcessExited;
+                Interface.Oxide.LogInfo(process.StartInfo.FileName);
                 process.Start();
             }
             catch (Exception ex)

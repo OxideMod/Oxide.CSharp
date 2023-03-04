@@ -3,16 +3,18 @@
 namespace ObjectStream.Data
 {
     [Serializable]
-    internal class CompilerData
+    public class CompilerData
     {
         public CompilerData()
         {
             StdLib = false;
             Target = CompilerTarget.Library;
             Platform = CompilerPlatform.AnyCPU;
-            Version = CompilerLanguageVersion.Default;
+            Version = CompilerLanguageVersion.Preview;
             LoadDefaultReferences = false;
             SdkVersion = "2";
+            Encoding = System.Text.Encoding.Default.WebName;
+            Debug = false;
         }
 
         public bool LoadDefaultReferences { get; set; }
@@ -24,5 +26,7 @@ namespace ObjectStream.Data
         public bool StdLib { get; set; }
         public CompilerTarget Target { get; set; }
         public CompilerLanguageVersion Version { get; set; }
+        public string Encoding { get; set; }
+        public bool Debug { get; set; }
     }
 }
