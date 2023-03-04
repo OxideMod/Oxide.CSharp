@@ -24,6 +24,7 @@ namespace Oxide.Plugins
         public string Name;
         public DateTime CompiledAt;
         public byte[] RawAssembly;
+        public byte[] Symbols;
         public byte[] PatchedAssembly;
         public float Duration;
         public Assembly LoadedAssembly;
@@ -45,13 +46,14 @@ namespace Oxide.Plugins
             "System.Net.Sockets.SocketFlags", "System.Security.Cryptography", "System.Threading.Interlocked", "System.Threading.Monitor"
         };
 
-        public CompiledAssembly(string name, CompilablePlugin[] plugins, byte[] rawAssembly, float duration)
+        public CompiledAssembly(string name, CompilablePlugin[] plugins, byte[] rawAssembly, float duration, byte[] symbols)
         {
             Name = name;
             CompilablePlugins = plugins;
             RawAssembly = rawAssembly;
             Duration = duration;
             PluginNames = CompilablePlugins.Select(pl => pl.Name).ToArray();
+            Symbols = symbols;
         }
 
         public void LoadAssembly(Action<bool> callback)
@@ -83,7 +85,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                LoadedAssembly = Assembly.Load(rawAssembly);
+                LoadedAssembly = Symbols != null ? Assembly.Load(rawAssembly, Symbols) : Assembly.Load(rawAssembly);
                 isLoaded = true;
 
                 foreach (Action<bool> cb in loadCallbacks)

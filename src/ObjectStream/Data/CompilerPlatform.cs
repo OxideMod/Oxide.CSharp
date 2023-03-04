@@ -3,7 +3,7 @@ using System;
 namespace ObjectStream.Data
 {
     [Serializable]
-    internal enum CompilerPlatform
+    public enum CompilerPlatform
     {
         AnyCPU,
         AnyCPU32Preferred,

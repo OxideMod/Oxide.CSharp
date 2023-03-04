@@ -3,7 +3,7 @@
 namespace ObjectStream.Data
 {
     [Serializable]
-    internal enum CompilerMessageType
+    public enum CompilerMessageType
     {
         Assembly,
         Compile,

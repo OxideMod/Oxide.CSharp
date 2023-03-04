@@ -64,12 +64,12 @@ namespace Oxide.Plugins
             name = (plugins.Count < 2 ? plugins.First().Name : "plugins_") + Math.Round(Interface.Oxide.Now * 10000000f) + ".dll";
         }
 
-        internal void Completed(byte[] rawAssembly = null)
+        internal void Completed(byte[] rawAssembly = null, byte[] symbols = null)
         {
             endedAt = Interface.Oxide.Now;
             if (plugins.Count > 0 && rawAssembly != null)
             {
-                compiledAssembly = new CompiledAssembly(name, plugins.ToArray(), rawAssembly, duration);
+                compiledAssembly = new CompiledAssembly(name, plugins.ToArray(), rawAssembly, duration, symbols);
             }
 
             Interface.Oxide.NextTick(() => callback(this));

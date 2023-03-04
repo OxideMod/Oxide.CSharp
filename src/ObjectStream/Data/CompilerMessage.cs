@@ -3,7 +3,7 @@
 namespace ObjectStream.Data
 {
     [Serializable]
-    internal class CompilerMessage
+    public class CompilerMessage
     {
         public object Data { get; set; }
 
