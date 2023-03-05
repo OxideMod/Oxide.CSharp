@@ -1,5 +1,6 @@
 ﻿using Oxide.Core;
 using Oxide.Core.Plugins;
+using Oxide.CSharp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,18 +32,18 @@ namespace Oxide.Plugins
         public override string FileExtension => ".cs";
 
         private List<CompilablePlugin> compilationQueue = new List<CompilablePlugin>();
-        private PluginCompiler compiler;
+        private CompilerService compiler;
 
         public CSharpPluginLoader(CSharpExtension extension)
         {
             Instance = this;
             CSharpPluginLoader.extension = extension;
-            compiler = new PluginCompiler();
+            compiler = new CompilerService();
         }
 
         public void OnModLoaded()
         {
-            PluginCompiler.CheckCompilerBinary();
+            compiler.Precheck();
 
             // Include references to all loaded game extensions and any assemblies they reference
             foreach (Core.Extensions.Extension extension in Interface.Oxide.GetAllExtensions())
@@ -73,7 +74,8 @@ namespace Oxide.Plugins
 
         public override IEnumerable<string> ScanDirectory(string directory)
         {
-            if (PluginCompiler.BinaryPath == null)
+            bool installed = compiler.Installed;
+            if (!installed)
             {
                 yield break;
             }
@@ -297,6 +299,6 @@ namespace Oxide.Plugins
             });
         }
 
-        public void OnShutdown() => compiler.Shutdown();
+        public void OnShutdown() => compiler.Stop();
     }
 }
