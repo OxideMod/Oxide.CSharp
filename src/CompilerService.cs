@@ -32,7 +32,7 @@ namespace Oxide.CSharp
         private string dotnetInstall;
         private string dotnetInstallScript;
         private static PlatformID PlatformID;
-        private static Regex fileErrorRegex = new Regex(@"^\[Error\]\[(?'Code'\S+)\] (?'Message'.+), Source File: SourceFile\((?'File'\S+)\[.+\)$", RegexOptions.Compiled);
+        private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
         public bool Installed => File.Exists(filePath);
 
         public CompilerService()
@@ -41,7 +41,7 @@ namespace Oxide.CSharp
             messageQueue = new Queue<CompilerMessage>();
             string arc = IntPtr.Size == 8 ? "x64" : "x86";
             filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Compiler");
-            remoteName = $"Compiler.{arc}";
+            remoteName = $"Compiler.min.{arc}";
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
@@ -68,17 +68,17 @@ namespace Oxide.CSharp
 
         internal bool Precheck()
         {
-            if (HasFrameworkInstalled(dotnet, dotnetInstall, dotnetInstallScript))
+            if (HasDotNetInstalled(dotnet, dotnetInstall, dotnetInstallScript))
             {
-                remoteName += ".min";
-                Interface.Oxide.LogInfo(".NET 7 is already installed, downloading minified version of the compiler");
+                Interface.Oxide.LogInfo("[Compiler] Downloading minified version of the compiler");
             }
             else
             {
-                Interface.Oxide.LogInfo(".NET 7 could not be found, downloading packed version of the compiler");
+                remoteName = remoteName.Replace(".min", string.Empty);
+                Interface.Oxide.LogInfo("[Compiler] Downloading packed version of the compiler");
             }
 
-            if (!DownloadFile($"https://s3.us-west-1.amazonaws.com/s3.vandersluis.club/oxide.compiler/{remoteName}", filePath, 3))
+            if (!DownloadFile($"http://cdn.oxidemod.cloud/compiler/{remoteName}", filePath, 3))
             {
                 return false;
             }
@@ -100,6 +100,30 @@ namespace Oxide.CSharp
 
             Stop();
             PurgeOldLogs();
+            Dictionary<string, string> settings = new Dictionary<string, string>()
+            {
+                ["Path:Root"] = Interface.Oxide.RootDirectory,
+                ["Path:Logging"] = Interface.Oxide.LogDirectory,
+                ["Path:Plugins"] = Interface.Oxide.PluginDirectory,
+                ["Path:Configuration"] = Interface.Oxide.ConfigDirectory,
+                ["Path:Data"] = Interface.Oxide.DataDirectory,
+                ["Path:Libraries"] = Interface.Oxide.ExtensionDirectory,
+                ["Compiler:AllowUnsafe"] = "true",
+                ["Compiler:UseStandardLibraries"] = "false",
+                ["Compiler:Force"] = "true",
+                ["Compiler:EnableMessageStream"] = "true",
+                ["Logging:FileName"] = Path.Combine(Interface.Oxide.LogDirectory, "compiler.log"),
+#if DEBUG
+                ["Logging:Level"] = "Debug"
+#else
+                ["Logging:Level"] = "Information"
+#endif
+            };
+
+            foreach (var setting in settings)
+            {
+                Environment.SetEnvironmentVariable("OXIDE:" + setting.Key, setting.Value);
+            }
 
             try
             {
@@ -228,14 +252,18 @@ namespace Oxide.CSharp
                                 continue;
                             }
 
+                            if (match.Groups["Severity"].Value != "Error")
+                                continue;
+
                             string fileName = match.Groups["File"].Value;
                             string scriptName = Path.GetFileNameWithoutExtension(fileName);
                             string error = match.Groups["Message"].Value;
+
                             CompilablePlugin compilablePlugin = compilation.plugins.SingleOrDefault(pl => pl.ScriptName == scriptName);
 
                             if (compilablePlugin == null)
                             {
-                                Interface.Oxide.LogError($"Unable to resolve script error to plugin: {line}");
+                                Interface.Oxide.LogError($"Unable to resolve script error to {fileName}: {error}");
                                 continue;
                             }
 
@@ -244,6 +272,7 @@ namespace Oxide.CSharp
                             if (missingRequirements.Any())
                             {
                                 compilablePlugin.CompilerErrors = $"Missing dependencies: {string.Join("," , missingRequirements.ToArray())}";
+                                Interface.Oxide.LogDebug($"[{match.Groups["Severity"].Value}][{scriptName}] Missing dependencies: {string.Join(",", missingRequirements.ToArray())}");
                             }
                             else
                             {
@@ -280,6 +309,7 @@ namespace Oxide.CSharp
                     break;
 
                 case CompilerMessageType.Ready:
+                    Interface.Oxide.LogDebug("[Compiler] Ready Message");
                     connection.PushMessage(message);
                     if (!ready)
                     {
@@ -361,10 +391,10 @@ namespace Oxide.CSharp
             }
 
             compilation.Started();
-            //Interface.Oxide.LogDebug("Compiling with references: {0}", compilation.references.Keys.ToSentence());
+            Interface.Oxide.LogDebug("Compiling with references: {0}", string.Join(", ", compilation.references.Keys.ToArray()));
             List<CompilerFile> sourceFiles = compilation.plugins.SelectMany(plugin => plugin.IncludePaths).Distinct().Select(path => new CompilerFile(path)).ToList();
             sourceFiles.AddRange(compilation.plugins.Select(plugin => new CompilerFile(plugin.ScriptPath ?? plugin.ScriptName, plugin.ScriptSource)));
-            //Interface.Oxide.LogDebug("Compiling files: {0}", sourceFiles.Select(f => f.Name).ToSentence());
+            Interface.Oxide.LogDebug("Compiling files: {0}", string.Join(", ", sourceFiles.Select(f => f.Name).ToArray()));
             CompilerData data = new CompilerData
             {
                 OutputFile = compilation.name,
@@ -566,77 +596,126 @@ namespace Oxide.CSharp
             return false;
         }
 
-        private static bool HasFrameworkInstalled(string dotnet, string url, string script, bool shouldDownload = true)
+        private static bool HasDotNetInstalled(string dotnet, string url, string script)
         {
-            bool isInstalled = false;
-            string dotPath = Path.Combine(Interface.Oxide.ExtensionDirectory, ".dotnet");
+            string localDir = Path.Combine(Interface.Oxide.ExtensionDirectory, ".dotnet");
             try
             {
-                string dotFilepath = Path.Combine(dotPath, dotnet);
-                if (Directory.Exists(dotPath) && File.Exists(dotFilepath))
+                bool isInstalled = ScanPath(dotnet, out string fullPath);
+
+                if (!isInstalled)
                 {
-                    Environment.SetEnvironmentVariable("DOTNET_ROOT", dotPath);
-                    string unixPath = Environment.GetEnvironmentVariable("PATH");
-                    Environment.SetEnvironmentVariable("PATH", unixPath + $":{dotPath}:{Path.Combine(dotPath, "tools")}");
-                    dotnet = dotFilepath;
-                    SetFilePermissions(dotnet);
+                    fullPath = Path.Combine(localDir, dotnet);
+
+                    if (File.Exists(fullPath))
+                    {
+                        Environment.SetEnvironmentVariable("DOTNET_ROOT", localDir);
+                        AppendPathVariable(localDir);
+                        AppendPathVariable(Path.Combine(localDir, "tools"));
+                        Interface.Oxide.LogDebug("[Compiler] Local installation of dotnet found");
+                        isInstalled = true;
+                    }
+                    else
+                    {
+                        string installScript = Path.Combine(Interface.Oxide.RootDirectory, script);
+
+                        if (DownloadFile(url, installScript, 2) && SetFilePermissions(installScript))
+                        {
+                            string prog;
+                            string args;
+                            if (PlatformID == PlatformID.Unix)
+                            {
+                                prog = "tar";
+                                args = $"-xzf '{installScript}' -C '{localDir + Path.DirectorySeparatorChar}'";
+                                if (!Directory.Exists(localDir))
+                                {
+                                    Directory.CreateDirectory(localDir);
+                                }
+                            }
+                            else
+                            {
+                                prog = "powershell.exe";
+                                args = $"& '{installScript}' -Channel 7.0 -InstallDir \"{localDir}\" -Runtime dotnet -NoPath";
+                            }
+
+                            Process process = Process.Start(new ProcessStartInfo(prog, args));
+                            process.WaitForExit();
+                            Cleanup.Add(installScript);
+
+                            Environment.SetEnvironmentVariable("DOTNET_ROOT", localDir);
+                            AppendPathVariable(localDir);
+                            AppendPathVariable(Path.Combine(localDir, "tools"));
+                            Interface.Oxide.LogDebug("[Compiler] Local installation of dotnet downloaded");
+                            isInstalled = true;
+                        }
+                    }
+                }
+                else
+                {
+                    Interface.Oxide.LogDebug("[Compiler] Global installation of dotnet found");
+
+                    if (Directory.Exists(localDir))
+                    {
+                        Interface.Oxide.LogDebug("[Compiler] Deleting local instance of dotnet to reclaim disk space");
+                        Directory.Delete(localDir, true);
+                    }
                 }
 
-                Process process = Process.Start(new ProcessStartInfo(dotnet, "--list-runtimes")
+                if (!isInstalled)
+                {
+                    Interface.Oxide.LogError("[Compiler] Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0");
+                    return false;
+                }
+
+                Process dot = Process.Start(new ProcessStartInfo(fullPath, "--list-runtimes")
                 {
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     RedirectStandardOutput = true
                 });
 
-                process.WaitForExit();
+                dot.WaitForExit();
 
-                string sdksFull = process.StandardOutput.ReadToEnd();
+                string sdksFull = dot.StandardOutput.ReadToEnd();
                 string[] sdks = sdksFull.Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                isInstalled = sdks != null && sdks.Any(s => s.StartsWith("Microsoft.NETCore.App 7."));
+                return sdks != null && sdks.Any(s => s.StartsWith("Microsoft.NETCore.App 7."));
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                Interface.Oxide.LogException("[Compiler] Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0", e);
+                return false;
             }
+        }
 
-            if (!isInstalled && shouldDownload)
+        private static bool ScanPath(string file, out string fullPath)
+        {
+            fullPath = null;
+            string[] paths = Environment.GetEnvironmentVariable("PATH").Split(new char[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string path in paths)
             {
-                try
-                {
-                    string install = Path.Combine(Interface.Oxide.RootDirectory, script);
+                string filePath = Path.Combine(path, file);
 
-                    if (DownloadFile(url, install, 2) && SetFilePermissions(install))
-                    {
-                        string prog;
-                        string args;
-                        if (PlatformID == PlatformID.Unix)
-                        {
-                            prog = "tar";
-                            args = $"-xzf '{install}' -C '{dotPath + Path.DirectorySeparatorChar}'";
-                            if (!Directory.Exists(dotPath))
-                            {
-                                Directory.CreateDirectory(dotPath);
-                            }
-                        }
-                        else
-                        {
-                            prog = "powershell.exe";
-                            args = $"& '{install}' -Channel 7.0 -InstallDir \"{dotPath}\" -Runtime dotnet -NoPath";
-                        }
-
-                        Process process = Process.Start(new ProcessStartInfo(prog, args));
-                        process.WaitForExit();
-                        Cleanup.Add(install);
-                        return HasFrameworkInstalled(dotnet, url, script, false);
-                    }
-                }
-                catch (Exception e)
+                if (File.Exists(filePath))
                 {
-                    Interface.Oxide.LogException("Failed to run dotnet install script", e);
+                    fullPath = filePath;
+                    return true;
                 }
             }
 
-            return isInstalled;
+            return false;
+        }
+
+        private static void AppendPathVariable(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            string PATH = Environment.GetEnvironmentVariable("PATH");
+            PATH += Path.PathSeparator + path;
+            Environment.SetEnvironmentVariable("PATH", PATH);
         }
     }
 }

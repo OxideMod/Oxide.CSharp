@@ -475,7 +475,7 @@ namespace Oxide.Plugins
             lock (_logFileLock)
             {
                 using (FileStream file = new FileStream(Path.Combine(path, Utility.CleanPath(filename)), FileMode.Append, FileAccess.Write, FileShare.Read))
-                using (StreamWriter writer = new StreamWriter(file, Encoding.Unicode))
+                using (StreamWriter writer = new StreamWriter(file, Encoding.UTF8))
                 {
                     writer.Write(timestampPrefix ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {text}" : text);
                 }
