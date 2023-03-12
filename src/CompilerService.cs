@@ -3,6 +3,7 @@
 using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
+using Oxide.Core.Logging;
 using Oxide.Plugins;
 using References::Mono.Unix.Native;
 using System;
@@ -70,12 +71,12 @@ namespace Oxide.CSharp
         {
             if (HasDotNetInstalled(dotnet, dotnetInstall, dotnetInstallScript))
             {
-                Interface.Oxide.LogInfo("[Compiler] Downloading minified version of the compiler");
+                Log(LogType.Info, ".NET 7 is installed, minified version of Oxide.Compiler selected.");
             }
             else
             {
                 remoteName = remoteName.Replace(".min", string.Empty);
-                Interface.Oxide.LogInfo("[Compiler] Downloading packed version of the compiler");
+                Log(LogType.Info, ".NET 7 not found, packed version of Oxide.Compiler selected.");
             }
 
             if (!DownloadFile($"http://cdn.oxidemod.cloud/compiler/{remoteName}", filePath, 3))
@@ -99,7 +100,7 @@ namespace Oxide.CSharp
             }
 
             Stop();
-            PurgeOldLogs();
+
             Dictionary<string, string> settings = new Dictionary<string, string>()
             {
                 ["Path:Root"] = Interface.Oxide.RootDirectory,
@@ -141,31 +142,31 @@ namespace Oxide.CSharp
                 };
                 process.Exited += OnProcessExited;
                 process.Start();
-                Interface.Oxide.LogInfo("Compiler started");
+                Log(LogType.Info, "Compiler has been started successfully");
             }
             catch (Exception ex)
             {
                 process?.Dispose();
                 process = null;
-                Interface.Oxide.LogException($"Exception while starting compiler: ", ex);
+                Log(LogType.Error, $"Exception while starting compiler", exception: ex);
                 if (filePath.Contains("'"))
                 {
-                    Interface.Oxide.LogWarning("Server directory path contains an apostrophe, compiler will not work until path is renamed");
+                    Log(LogType.Error, "Server directory path contains an apostrophe, compiler will not work until path is renamed");
                 }
                 else if (Environment.OSVersion.Platform == PlatformID.Unix)
                 {
-                    Interface.Oxide.LogWarning("Compiler may not be set as executable; chmod +x or 0744/0755 required");
+                    Log(LogType.Error, "Compiler may not be set as executable; chmod +x or 0744/0755 required");
                 }
 
                 if (ex.GetBaseException() != ex)
                 {
-                    Interface.Oxide.LogException("BaseException: ", ex.GetBaseException());
+                    Log(LogType.Error, "BaseException: ", exception: ex.GetBaseException());
                 }
 
                 Win32Exception win32 = ex as Win32Exception;
                 if (win32 != null)
                 {
-                    Interface.Oxide.LogError("Win32 NativeErrorCode: {0} ErrorCode: {1} HelpLink: {2}", win32.NativeErrorCode, win32.ErrorCode, win32.HelpLink);
+                    Log(LogType.Error, $"Win32 NativeErrorCode: {win32.NativeErrorCode} ErrorCode: {win32.ErrorCode} HelpLink: {win32.HelpLink}");
                 }
             }
 
@@ -190,37 +191,46 @@ namespace Oxide.CSharp
         {
             ready = false;
             Process endedProcess = process;
-            if (endedProcess != null)
+            ObjectStreamClient<CompilerMessage> stream = client;
+            if (endedProcess == null || stream == null)
             {
-                endedProcess.Exited -= OnProcessExited;
+                return;
             }
 
             process = null;
-            if (client == null)
-            {
-                return;
-            }
-
-            client.Message -= OnMessage;
-            client.Error -= OnError;
-            client.PushMessage(new CompilerMessage { Type = CompilerMessageType.Exit });
-            client.Stop();
             client = null;
+            endedProcess.Exited -= OnProcessExited;
+            endedProcess.Refresh();
+            stream.Message -= OnMessage;
+            stream.Error -= OnError;
 
-            if (endedProcess == null)
+            if (!endedProcess.HasExited)
             {
-                return;
-            }
-
-            ThreadPool.QueueUserWorkItem(_ =>
-            {
-                Thread.Sleep(5000);
-                // Calling Close can block up to 60 seconds on certain machines
-                if (!endedProcess.HasExited)
+                ThreadPool.QueueUserWorkItem(_ =>
                 {
-                    endedProcess.Kill();
-                }
-            });
+                    stream.PushMessage(new CompilerMessage { Type = CompilerMessageType.Exit });
+                    if (endedProcess.WaitForExit(10000))
+                    {
+                        Log(LogType.Info, "Compiler shutdown completed");
+                    }
+                    else
+                    {
+                        Log(LogType.Warning, "Compiler failed to gracefully shutdown, killing the process...");
+                        endedProcess.Kill();
+                    }
+
+                    stream.Stop();
+                    stream = null;
+                    endedProcess.Close();
+                });
+            }
+            else
+            {
+                stream.Stop();
+                stream = null;
+                endedProcess.Close();
+                Log(LogType.Info, "Released compiler resources", true);
+            }
         }
 
         private void OnMessage(ObjectStreamConnection<CompilerMessage, CompilerMessage> connection, CompilerMessage message)
@@ -237,7 +247,7 @@ namespace Oxide.CSharp
                     Compilation compilation = compilations[message.Id];
                     if (compilation == null)
                     {
-                        Interface.Oxide.LogWarning("Compiler compiled an unknown assembly"); // TODO: Any way to clarify this?
+                        Log(LogType.Error, "Compiler compiled an unknown assembly", true); // TODO: Any way to clarify this?
                         return;
                     }
                     compilation.endedAt = Interface.Oxide.Now;
@@ -263,7 +273,7 @@ namespace Oxide.CSharp
 
                             if (compilablePlugin == null)
                             {
-                                Interface.Oxide.LogError($"Unable to resolve script error to {fileName}: {error}");
+                                Log(LogType.Error, $"Unable to resolve script error to {fileName}: {error}", true);
                                 continue;
                             }
 
@@ -272,7 +282,7 @@ namespace Oxide.CSharp
                             if (missingRequirements.Any())
                             {
                                 compilablePlugin.CompilerErrors = $"Missing dependencies: {string.Join("," , missingRequirements.ToArray())}";
-                                Interface.Oxide.LogDebug($"[{match.Groups["Severity"].Value}][{scriptName}] Missing dependencies: {string.Join(",", missingRequirements.ToArray())}");
+                                Log(LogType.Error, $"[{match.Groups["Severity"].Value}][{scriptName}] Missing dependencies: {string.Join(",", missingRequirements.ToArray())}", true);
                             }
                             else
                             {
@@ -298,7 +308,7 @@ namespace Oxide.CSharp
                     break;
 
                 case CompilerMessageType.Error:
-                    Interface.Oxide.LogError("Compilation error: {0}", message.Data);
+                    Log(LogType.Error, $"Compilation error: {message.Data}");
                     compilations[message.Id].Completed();
                     compilations.Remove(message.Id);
                     Interface.Oxide.NextTick(() =>
@@ -309,7 +319,7 @@ namespace Oxide.CSharp
                     break;
 
                 case CompilerMessageType.Ready:
-                    Interface.Oxide.LogDebug("[Compiler] Ready Message");
+                    Log(LogType.Info, "Compiler sent the ready signal, starting compilations. . .", true);
                     connection.PushMessage(message);
                     if (!ready)
                     {
@@ -323,7 +333,7 @@ namespace Oxide.CSharp
             }
         }
 
-        private static void OnError(Exception exception) => Interface.Oxide.LogException("Compilation error: ", exception);
+        private static void OnError(Exception exception) => Log(LogType.Error, "Compilation error: ", exception: exception);
 
         private void OnProcessExited(object sender, EventArgs eventArgs)
         {
@@ -336,35 +346,15 @@ namespace Oxide.CSharp
 
                 if (string.IsNullOrEmpty(envPath) || !envPath.Contains(libraryPath))
                 {
-                    Interface.Oxide.LogWarning($"PATH does not contain path to compiler dependencies: {libraryPath}");
+                    Log(LogType.Warning, $"PATH does not contain path to compiler dependencies: {libraryPath}");
                 }
                 else
                 {
-                    Interface.Oxide.LogWarning("User running server may not have the proper permissions or install is missing files");
+                    Log(LogType.Warning, "User running server may not have the proper permissions or install is missing files");
                 }
 
                 Stop();
             });
-        }
-
-        private static void PurgeOldLogs()
-        {
-            try
-            {
-                IEnumerable<string> filePaths = Directory.GetFiles(Interface.Oxide.LogDirectory, "*.log").Where(f =>
-                {
-                    string fileName = Path.GetFileName(f);
-                    return fileName != null && fileName.StartsWith("compiler_");
-                });
-                foreach (string filePath in filePaths)
-                {
-                    File.Delete(filePath);
-                }
-            }
-            catch (Exception)
-            {
-                // Ignored
-            }
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
@@ -391,10 +381,10 @@ namespace Oxide.CSharp
             }
 
             compilation.Started();
-            Interface.Oxide.LogDebug("Compiling with references: {0}", string.Join(", ", compilation.references.Keys.ToArray()));
+            Log(LogType.Info, $"Compiling with references: {string.Join(", ", compilation.references.Keys.ToArray())}", true);
             List<CompilerFile> sourceFiles = compilation.plugins.SelectMany(plugin => plugin.IncludePaths).Distinct().Select(path => new CompilerFile(path)).ToList();
             sourceFiles.AddRange(compilation.plugins.Select(plugin => new CompilerFile(plugin.ScriptPath ?? plugin.ScriptName, plugin.ScriptSource)));
-            Interface.Oxide.LogDebug("Compiling files: {0}", string.Join(", ", sourceFiles.Select(f => f.Name).ToArray()));
+            Log(LogType.Info, $"Compiling files: {string.Join(", ", sourceFiles.Select(f => f.Name).ToArray())}", true);
             CompilerData data = new CompilerData
             {
                 OutputFile = compilation.name,
@@ -444,26 +434,22 @@ namespace Oxide.CSharp
             {
                 if (Syscall.access(filePath, AccessModes.X_OK) == 0)
                 {
-                    Interface.Oxide.LogInfo($"{name} is executable");
+                    Log(LogType.Info, $"{name} is executable", true);
                 }
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Unable to check {name} for executable permission");
-                Interface.Oxide.LogError(ex.Message);
-                Interface.Oxide.LogError(ex.StackTrace);
+                Log(LogType.Error, $"Unable to check {name} for executable permission", exception: ex);
             }
             try
             {
                 Syscall.chmod(filePath, FilePermissions.S_IRWXU);
-                Interface.Oxide.LogInfo($"File permissions set for {name}");
+                Log(LogType.Info, $"File permissions set for {name}", true);
                 return true;
             }
             catch (Exception ex)
             {
-                Interface.Oxide.LogError($"Could not set {filePath} as executable, please set manually");
-                Interface.Oxide.LogError(ex.Message);
-                Interface.Oxide.LogError(ex.StackTrace);
+                Log(LogType.Error, $"Could not set {filePath} as executable, please set manually", exception: ex);
             }
             return false;
         }
@@ -478,19 +464,26 @@ namespace Oxide.CSharp
                 if (File.Exists(path))
                 {
                     last = File.GetLastWriteTimeUtc(path);
-                    Interface.Oxide.LogInfo($"Checking for new version of {fileName}");
+                    Log(LogType.Info, $"{fileName} already exists, checking for updates. . .");
                 }
                 else
                 {
-                    Interface.Oxide.LogInfo($"Downloading {fileName}. . .");
+                    Log(LogType.Info, $"Downloading {fileName}. . .");
                 }
 
                 byte[] data;
                 int code;
-                if (!TryDownload(url, retries, ref retry, last, out data, out code))
+                bool newerFound;
+                if (!TryDownload(url, retries, ref retry, last, out data, out code, out newerFound))
                 {
-                    Interface.Oxide.LogError($"Failed to download {fileName} after {retry} attempts with response code '{code}', please manually download it from {url} and save it here {path}");
+                    string attemptVerb = retries == 1 ? "attempt" : "attempts";
+                    Log(LogType.Error, $"Failed to download {fileName} after {retry} {attemptVerb} with response code '{code}', please manually download it from {url} and save it here {path}");
                     return false;
+                }
+
+                if (!newerFound)
+                {
+                    Log(LogType.Info, $"Latest version of {fileName} already exists");
                 }
 
                 if (data != null)
@@ -499,21 +492,21 @@ namespace Oxide.CSharp
                     {
                         fs.Write(data, 0, data.Length);
                     }
+                    Log(LogType.Info, $"Latest version of {fileName} has been downloaded");
                 }
 
                 return true;
             }
             catch (Exception e)
             {
-                Interface.Oxide.LogError($"Unexpected error occurred while trying to download {fileName}, please manually download it from {url} and save it here {path}");
-                Interface.Oxide.LogError(e.Message);
-                Interface.Oxide.LogError(e.StackTrace);
+                Log(LogType.Error, $"Unexpected error occurred while trying to download {fileName}, please manually download it from {url} and save it here {path}", exception: e);
                 return false;
             }
         }
 
-        private static bool TryDownload(string url, int retries, ref int current, DateTime? lastModified, out byte[] data, out int code)
+        private static bool TryDownload(string url, int retries, ref int current, DateTime? lastModified, out byte[] data, out int code, out bool newerFound)
         {
+            newerFound = true;
             data = null;
             code = -1;
             try
@@ -532,6 +525,7 @@ namespace Oxide.CSharp
                 switch (statusCode)
                 {
                     case 304:
+                        newerFound = false;
                         return true;
 
                     case 200:
@@ -542,7 +536,7 @@ namespace Oxide.CSharp
                         {
                             current++;
                             Thread.Sleep(1000);
-                            return TryDownload(url, retries, ref current, lastModified, out data, out code);
+                            return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound);
                         }
                         else
                         {
@@ -578,13 +572,14 @@ namespace Oxide.CSharp
                     switch (r.StatusCode)
                     {
                         case HttpStatusCode.NotModified:
+                            newerFound = false;
                             return true;
                         default:
                             if (current <= retries)
                             {
                                 current++;
                                 Thread.Sleep(1000);
-                                return TryDownload(url, retries, ref current, lastModified, out data, out code);
+                                return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound);
                             }
                             else
                             {
@@ -612,7 +607,7 @@ namespace Oxide.CSharp
                         Environment.SetEnvironmentVariable("DOTNET_ROOT", localDir);
                         AppendPathVariable(localDir);
                         AppendPathVariable(Path.Combine(localDir, "tools"));
-                        Interface.Oxide.LogDebug("[Compiler] Local installation of dotnet found");
+                        Log(LogType.Info, "Local installation of dotnet found", true);
                         isInstalled = true;
                     }
                     else
@@ -645,25 +640,25 @@ namespace Oxide.CSharp
                             Environment.SetEnvironmentVariable("DOTNET_ROOT", localDir);
                             AppendPathVariable(localDir);
                             AppendPathVariable(Path.Combine(localDir, "tools"));
-                            Interface.Oxide.LogDebug("[Compiler] Local installation of dotnet downloaded");
+                            Log(LogType.Info, "Local installation of dotnet downloaded", true);
                             isInstalled = true;
                         }
                     }
                 }
                 else
                 {
-                    Interface.Oxide.LogDebug("[Compiler] Global installation of dotnet found");
+                    Log(LogType.Info, "Global installation of .NET 7 found", true);
 
                     if (Directory.Exists(localDir))
                     {
-                        Interface.Oxide.LogDebug("[Compiler] Deleting local instance of dotnet to reclaim disk space");
                         Directory.Delete(localDir, true);
+                        Log(LogType.Warning, "Deleting local install of .NET 7 to reclaim disk space");
                     }
                 }
 
                 if (!isInstalled)
                 {
-                    Interface.Oxide.LogError("[Compiler] Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0");
+                    Log(LogType.Error, "Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0");
                     return false;
                 }
 
@@ -682,7 +677,7 @@ namespace Oxide.CSharp
             }
             catch (Exception e)
             {
-                Interface.Oxide.LogException("[Compiler] Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0", e);
+                Log(LogType.Error, "Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0", exception: e);
                 return false;
             }
         }
@@ -716,6 +711,35 @@ namespace Oxide.CSharp
             string PATH = Environment.GetEnvironmentVariable("PATH");
             PATH += Path.PathSeparator + path;
             Environment.SetEnvironmentVariable("PATH", PATH);
+        }
+
+        private static void Log(LogType type, string message, bool isDebug = false, Exception exception = null)
+        {
+#if !DEBUG
+            if (isDebug)
+            {
+                return;
+            }
+#else
+            if (isDebug)
+            {
+                if (exception != null)
+                {
+                    Interface.Oxide.RootLogger.WriteException($"[DEBUG] [CSharp] {message}", exception);
+                    return;
+                }
+
+                Interface.Oxide.RootLogger.Write(type, $"[DEBUG] [CSharp] {message}");
+                return;
+            }
+#endif
+            if (exception != null)
+            {
+                Interface.Oxide.RootLogger.WriteException($"[CSharp] {message}", exception);
+                return;
+            }
+
+            Interface.Oxide.RootLogger.Write(type, $"[CSharp] {message}");
         }
     }
 }
