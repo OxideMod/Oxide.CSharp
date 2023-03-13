@@ -147,10 +147,16 @@ namespace Oxide.Plugins
                         }
                     }
 
+                    using (MemoryStream stream = new MemoryStream())
+                    {
+                        definition.Write(stream);
+                        PatchedAssembly = stream.ToArray();
+                    }
+
                     Interface.Oxide.NextTick(() =>
                     {
                         isPatching = false;
-                        callback(RawAssembly);
+                        callback(PatchedAssembly);
                     });
                 }
                 catch (Exception ex)
