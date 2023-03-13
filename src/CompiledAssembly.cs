@@ -19,6 +19,7 @@ namespace Oxide.Plugins
         public string Name;
         public DateTime CompiledAt;
         public byte[] RawAssembly;
+        public byte[] PatchedAssembly;
         public float Duration;
         public Assembly LoadedAssembly;
         public bool IsLoading;
@@ -144,10 +145,16 @@ namespace Oxide.Plugins
                         }
                     }
 
+                    using (MemoryStream stream = new MemoryStream())
+                    {
+                        definition.Write(stream);
+                        PatchedAssembly = stream.ToArray();
+                    }
+
                     Interface.Oxide.NextTick(() =>
                     {
                         isPatching = false;
-                        callback(RawAssembly);
+                        callback(PatchedAssembly);
                     });
                 }
                 catch (Exception ex)
