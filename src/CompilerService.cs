@@ -381,16 +381,49 @@ namespace Oxide.CSharp
             }
 
             compilation.Started();
-            Log(LogType.Info, $"Compiling with references: {string.Join(", ", compilation.references.Keys.ToArray())}", true);
-            List<CompilerFile> sourceFiles = compilation.plugins.SelectMany(plugin => plugin.IncludePaths).Distinct().Select(path => new CompilerFile(path)).ToList();
-            sourceFiles.AddRange(compilation.plugins.Select(plugin => new CompilerFile(plugin.ScriptPath ?? plugin.ScriptName, plugin.ScriptSource)));
-            Log(LogType.Info, $"Compiling files: {string.Join(", ", sourceFiles.Select(f => f.Name).ToArray())}", true);
+
+            List<CompilerFile> sourceFiles = new List<CompilerFile>();
+            foreach (CompilablePlugin plugin in compilation.plugins)
+            {
+                string name = Path.GetFileName(plugin.ScriptPath ?? plugin.ScriptName);
+                if (plugin.ScriptSource == null || plugin.ScriptSource.Length == 0)
+                {
+                    plugin.CompilerErrors = "No data contained in .cs file";
+                    Log(LogType.Error, $"Ignoring plugin {name}, file is empty");
+                    continue;
+                }
+
+                foreach (var include in plugin.IncludePaths.Distinct())
+                {
+                    CompilerFile inc = new CompilerFile(include);
+                    if (inc.Data == null || inc.Data.Length == 0)
+                    {
+                        Log(LogType.Warning, $"Ignoring plugin {inc.Name}, file is empty");
+                        continue;
+                    }
+                    Log(LogType.Info, $"Adding {inc.Name} to compilation project", true);
+                    sourceFiles.Add(inc);
+                }
+
+                Log(LogType.Info, $"Adding plugin {name} to compilation project", true);
+                sourceFiles.Add(new CompilerFile(plugin.ScriptPath ?? plugin.ScriptName, plugin.ScriptSource));
+            }
+
+            if (sourceFiles.Count == 0)
+            {
+                Log(LogType.Error, $"Compilation job contained no valid plugins", true);
+                compilations.Remove(compilation.id);
+                compilation.Completed();
+                return;
+            }
+
             CompilerData data = new CompilerData
             {
                 OutputFile = compilation.name,
                 SourceFiles = sourceFiles.ToArray(),
                 ReferenceFiles = compilation.references.Values.ToArray()
             };
+
             CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
             if (ready)
             {
