@@ -19,8 +19,8 @@ namespace Oxide.Plugins
         public string Name;
         public DateTime CompiledAt;
         public byte[] RawAssembly;
-        public byte[] PatchedAssembly;
         public byte[] Symbols;
+        public byte[] PatchedAssembly;
         public float Duration;
         public Assembly LoadedAssembly;
         public bool IsLoading;
