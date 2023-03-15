@@ -1,10 +1,12 @@
 using ObjectStream.Data;
 using Oxide.Core;
+using Oxide.Core.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text.RegularExpressions;
 using System.Threading;
 
@@ -123,22 +125,18 @@ namespace Oxide.Plugins
                     {
                         if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".dll")))
                         {
-#if DEBUG
-                            Interface.Oxide.LogDebug($"Added default reference: {filename}");
-#endif
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Added default reference: {filename}");
                             references[filename + ".dll"] = new CompilerFile(Interface.Oxide.ExtensionDirectory, filename + ".dll");
                         }
 
                         if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".exe")))
                         {
-#if DEBUG
-                            Interface.Oxide.LogDebug($"Added default reference: {filename}");
-#endif
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Added default reference: {filename}");
                             references[filename + ".exe"] = new CompilerFile(Interface.Oxide.RootDirectory, filename + ".exe");
                         }
                     }
 
-                    //Interface.Oxide.LogDebug("Preparing compilation");
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Preparing compilation");
 
                     while (queuedPlugins.TryDequeue(out CompilablePlugin plugin))
                     {
@@ -152,18 +150,18 @@ namespace Oxide.Plugins
                             plugin.References.Clear();
                             plugin.IncludePaths.Clear();
                             plugin.Requires.Clear();
-                            Interface.Oxide.LogWarning("Plugin script is empty: " + plugin.Name);
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Compile, "CSharp", $"Script file is empty: {plugin.Name}");
                             RemovePlugin(plugin);
                         }
                         else if (plugins.Add(plugin))
                         {
-                            //Interface.Oxide.LogDebug("Adding plugin to compilation: " + plugin.Name);
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Added plugin to compilation: {plugin.Name}");
                             PreparseScript(plugin);
                             ResolveReferences(plugin);
                         }
                         else
                         {
-                            //Interface.Oxide.LogDebug("Plugin is already part of compilation: " + plugin.Name);
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Compile, "CSharp", $"Plugin is already part of the compilation: {plugin.Name}");
                         }
 
                         CacheModifiedScripts();
@@ -172,18 +170,15 @@ namespace Oxide.Plugins
                         if (queuedPlugins.Count == 0 && Current == this)
                         {
                             Current = null;
-                            //Interface.Oxide.LogDebug("Probably done preparing compilation: " + plugins.Select(p => p.Name).ToSentence());
                         }
                     }
-
-                    //Interface.Oxide.LogDebug("Done preparing compilation: " + plugins.Select(p => p.Name).ToSentence());
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Done preparing compilation: {plugins.Select(p => p.Name).ToSentence()}");
 
                     callback();
                 }
                 catch (Exception ex)
                 {
                     Interface.Oxide.LogException("Exception while resolving plugin references", ex);
-                    //RemoteLogger.Exception("Exception while resolving plugin references", ex);
                 }
             });
         }

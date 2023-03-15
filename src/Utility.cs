@@ -1,4 +1,7 @@
-﻿using System;
+﻿extern alias References;
+
+using Oxide.Core;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -79,5 +82,59 @@ namespace Oxide.Plugins
         public void Clear() => dictionary.Clear();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    internal static class EnvironmentHelper
+    {
+        public static void SetOxideEnvironmentalVariable(string name, string value, bool force = false)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            name = NormalizeKey(name);
+
+            if (force)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+                Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Info, null, "CSharp", $"Setting environmental variable: {name} => {value ?? "null"}");
+            }
+            else if (GetOxideEnvironmentalVariable(name) == null)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+                Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Info, null, "CSharp", $"Setting environmental variable: {name} => {value ?? "null"}");
+            }
+            else
+            {
+                Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Warning, null, "CSharp", $"Failed to set environmental variable: {name} => {value ?? "null"} | Value is already set, please use force parameter to force it");
+            }
+        }
+
+        public static string GetOxideEnvironmentalVariable(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
+            name = NormalizeKey(name);
+            string value = Environment.GetEnvironmentVariable(name);
+            Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Warning, null, "CSharp", $"Retrieving environmental variable: {name} => {value ?? "null"}");
+            return value;
+        }
+
+        private static string NormalizeKey(string key)
+        {
+            if (key.StartsWith("OXIDE:", StringComparison.InvariantCultureIgnoreCase))
+            {
+                key = key.Replace("oxide:", "OXIDE:");
+            }
+            else
+            {
+                key = "OXIDE:" + key;
+            }
+
+            return key;
+        }
     }
 }

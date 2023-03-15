@@ -1,6 +1,8 @@
 ﻿using Oxide.Core;
 using Oxide.Core.Plugins;
+using Oxide.Core.Logging;
 using Oxide.CSharp;
+using Oxide.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -98,7 +100,7 @@ namespace Oxide.Plugins
             CompilablePlugin compilablePlugin = GetCompilablePlugin(directory, name);
             if (compilablePlugin.IsLoading)
             {
-                Interface.Oxide.LogDebug($"Load requested for plugin which is already loading: {compilablePlugin.Name}");
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp", $"Load requested for plugin which is already loading: {compilablePlugin.Name}");
                 return null;
             }
 
@@ -135,7 +137,7 @@ namespace Oxide.Plugins
             CompilablePlugin compilablePlugin = GetCompilablePlugin(directory, name);
             if (compilablePlugin.IsLoading)
             {
-                Interface.Oxide.LogDebug($"Reload requested for plugin which is already loading: {compilablePlugin.Name}");
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp", $"Reload requested for plugin which is already loading: {compilablePlugin.Name}");
                 return;
             }
 
@@ -189,7 +191,7 @@ namespace Oxide.Plugins
                     IEnumerable<string> loadingRequirements = plugin.Requires.Where(r => LoadingPlugins.Contains(r));
                     if (loadingRequirements.Any())
                     {
-                        Interface.Oxide.LogDebug($"{plugin.Name} plugin is waiting for requirements to be loaded: {loadingRequirements.ToSentence()}");
+                        Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"{plugin.Name} plugin is waiting for requirements to be loaded: {loadingRequirements.ToSentence()}");
                     }
                     else
                     {
@@ -248,6 +250,12 @@ namespace Oxide.Plugins
         {
             LoadingPlugins.Remove(plugin.Name);
             plugin.IsLoading = false;
+
+            if (plugin.CompilerErrors != null && plugin.CompilerErrors.StartsWith("Timed out waiting for compilation"))
+            {
+                compiler.OnCompileTimeout();
+            }
+
             foreach (string loadingName in LoadingPlugins.ToArray())
             {
                 CompilablePlugin loadingPlugin = GetCompilablePlugin(plugin.Directory, loadingName);
@@ -268,8 +276,7 @@ namespace Oxide.Plugins
                     {
                         plugin.OnCompilationFailed();
                         PluginErrors[plugin.Name] = $"Failed to compile: {plugin.CompilerErrors}";
-                        Interface.Oxide.LogError($"Error while compiling: {plugin.CompilerErrors}");
-                        //RemoteLogger.Warning($"{plugin.ScriptName} plugin failed to compile!\n{plugin.CompilerErrors}");
+                        Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {plugin.CompilerErrors}");
                     }
                 }
                 else
@@ -292,7 +299,7 @@ namespace Oxide.Plugins
                         {
                             plugin.OnCompilationFailed();
                             PluginErrors[plugin.Name] = $"Failed to compile: {plugin.CompilerErrors}";
-                            Interface.Oxide.LogError($"Error while compiling: {plugin.CompilerErrors}");
+                            Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {plugin.CompilerErrors}");
                         }
                     }
                 }

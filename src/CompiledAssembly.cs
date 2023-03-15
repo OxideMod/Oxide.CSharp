@@ -2,6 +2,9 @@ extern alias References;
 
 using Oxide.Core;
 using Oxide.Core.CSharp;
+using Oxide.Core.Logging;
+using Oxide.CSharp;
+using Oxide.Logging;
 using References::Mono.Cecil;
 using System;
 using System.Collections.Generic;
@@ -69,7 +72,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                LoadedAssembly = Symbols != null ? Assembly.Load(rawAssembly, Symbols) : Assembly.Load(rawAssembly);
+                LoadedAssembly = Assembly.Load(rawAssembly);
                 isLoaded = true;
 
                 foreach (Action<bool> cb in loadCallbacks)
@@ -87,7 +90,7 @@ namespace Oxide.Plugins
         {
             if (isPatching)
             {
-                Interface.Oxide.LogWarning("Already patching plugin assembly: {0} (ignoring)", PluginNames.ToSentence());
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, Logging.LogEvent.Compile, "CSharp", $"Already patching plugin assembly: {PluginNames.ToSentence()} (ignoring)");
                 return;
             }
 
@@ -96,28 +99,43 @@ namespace Oxide.Plugins
             {
                 try
                 {
-                    AssemblyDefinition definition;
+                    AssemblyDefinition definition = null;
                     using (MemoryStream stream = new MemoryStream(RawAssembly))
                     {
-                        definition = AssemblyDefinition.ReadAssembly(stream);
+                        definition = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters() { AssemblyResolver = new AssemblyResolver() } );
                     }
 
-                    foreach (TypeDefinition type in definition.MainModule.Types)
+                    int foundPlugins = 0;
+                    int totalPlugins = CompilablePlugins.Count(p => p.CompilerErrors == null);
+                    for (int i = 0; i < definition.MainModule.Types.Count; i++)
                     {
-                        if (IsCompilerGenerated(type))
+                        if (foundPlugins == totalPlugins)
                         {
-                            continue;
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Patched {foundPlugins} of {totalPlugins} plugins");
+                            break;
                         }
-
-                        if (type.Namespace == "Oxide.Plugins")
+                        try
                         {
+                            TypeDefinition type = definition.MainModule.Types[i];
+
+                            if (type.Namespace != "Oxide.Plugins")
+                            {
+                                continue;
+                            }
+
                             if (PluginNames.Contains(type.Name))
                             {
+                                foundPlugins++;
+
+                                Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Preparing {type.Name} for runtime patching. . .");
+
                                 MethodDefinition constructor =
                                     type.Methods.FirstOrDefault(
                                         m => !m.IsStatic && m.IsConstructor && !m.HasParameters && !m.IsPublic);
+
                                 if (constructor != null)
                                 {
+                                    Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"User defined constructors are not supported. Please remove the constructor from {type.Name}.cs"); // Should be allowed
                                     CompilablePlugin plugin = CompilablePlugins.SingleOrDefault(p => p.Name == type.Name);
                                     if (plugin != null)
                                     {
@@ -126,24 +144,14 @@ namespace Oxide.Plugins
                                 }
                                 else
                                 {
+                                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Patching DirectCallMethod on {type.Name}");
                                     new DirectCallMethod(definition.MainModule, type);
                                 }
                             }
-                            else
-                            {
-                                Interface.Oxide.LogWarning(PluginNames.Length == 1
-                                                               ? $"{PluginNames[0]} has polluted the global namespace by defining {type.Name}"
-                                                               : $"A plugin has polluted the global namespace by defining {type.Name}");
-                            }
                         }
-                        else if (type.FullName != "<Module>")
+                        catch (Exception e)
                         {
-                            if (!PluginNames.Any(plugin => type.FullName.StartsWith($"Oxide.Plugins.{plugin}")))
-                            {
-                                Interface.Oxide.LogWarning(PluginNames.Length == 1
-                                                               ? $"{PluginNames[0]} has polluted the global namespace by defining {type.FullName}"
-                                                               : $"A plugin has polluted the global namespace by defining {type.FullName}");
-                            }
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"Failed to patch type at index {i}", e);
                         }
                     }
 
@@ -164,15 +172,13 @@ namespace Oxide.Plugins
                     Interface.Oxide.NextTick(() =>
                     {
                         isPatching = false;
-                        Interface.Oxide.LogException($"Exception while patching: {PluginNames.ToSentence()}", ex);
-                        callback(null);
+                        Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp", $"Failed to patch DirectCallHook method on plugins {PluginNames.ToSentence()}, performance may be degraded.", ex);
+                        callback(RawAssembly);
                     });
                 }
             });
         }
 
         public bool IsOutdated() => CompilablePlugins.Any(pl => pl.GetLastModificationTime() != CompiledAt);
-
-        private bool IsCompilerGenerated(TypeDefinition type) => type.CustomAttributes.Any(attr => attr.Constructor.DeclaringType.ToString().Contains("CompilerGeneratedAttribute"));
     }
 }

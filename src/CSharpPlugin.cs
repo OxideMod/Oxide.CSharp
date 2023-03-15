@@ -2,6 +2,7 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using Oxide.Core.Plugins.Watchers;
+using Oxide.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -86,7 +87,7 @@ namespace Oxide.Plugins
     /// <summary>
     /// Indicates that the specified field should be a reference to another plugin when it is loaded
     /// </summary>
-    [AttributeUsage(AttributeTargets.Field)]
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class PluginReferenceAttribute : Attribute
     {
         public string Name { get; }
@@ -207,7 +208,7 @@ namespace Oxide.Plugins
         protected PluginTimers timer;
 
         protected HashSet<PluginFieldInfo> onlinePlayerFields = new HashSet<PluginFieldInfo>();
-        private Dictionary<string, FieldInfo> pluginReferenceFields = new Dictionary<string, FieldInfo>();
+        private Dictionary<string, MemberInfo> pluginReferenceMembers = new Dictionary<string, MemberInfo>();
 
         private bool hookDispatchFallback;
 
@@ -221,13 +222,35 @@ namespace Oxide.Plugins
             timer = new PluginTimers(this);
 
             Type type = GetType();
-            foreach (FieldInfo field in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (MemberInfo member in type.GetMembers(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                object[] reference_attributes = field.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
+                if (member.MemberType != MemberTypes.Property && member.MemberType != MemberTypes.Field)
+                {
+                    continue;
+                }
+
+                if (member.MemberType == MemberTypes.Property)
+                {
+                    PropertyInfo property = member as PropertyInfo;
+                    if (!property.CanWrite)
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    FieldInfo field = member as FieldInfo;
+                    if (field.IsInitOnly)
+                    {
+                        continue;
+                    }
+                }
+
+                object[] reference_attributes = member.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
                 if (reference_attributes.Length > 0)
                 {
                     PluginReferenceAttribute pluginReference = reference_attributes[0] as PluginReferenceAttribute;
-                    pluginReferenceFields[pluginReference.Name ?? field.Name] = field;
+                    pluginReferenceMembers[pluginReference.Name ?? member.Name] = member;
                 }
             }
             foreach (MethodInfo method in type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
@@ -295,9 +318,16 @@ namespace Oxide.Plugins
                 Watcher.AddMapping(Name);
             }
 
-            foreach (string name in pluginReferenceFields.Keys)
+            foreach (var member in pluginReferenceMembers)
             {
-                pluginReferenceFields[name].SetValue(this, manager.GetPlugin(name));
+                if (member.Value.MemberType == MemberTypes.Property)
+                {
+                    ((PropertyInfo)member.Value).SetValue(this, manager.GetPlugin(member.Key), null);
+                }
+                else
+                {
+                    ((FieldInfo)member.Value).SetValue(this, manager.GetPlugin(member.Key));
+                }
             }
 
             /*var compilable_plugin = CSharpPluginLoader.GetCompilablePlugin(Interface.Oxide.PluginDirectory, Name);
@@ -327,9 +357,16 @@ namespace Oxide.Plugins
 
             Watcher.RemoveMapping(Name);
 
-            foreach (string name in pluginReferenceFields.Keys)
+            foreach (var member in pluginReferenceMembers)
             {
-                pluginReferenceFields[name].SetValue(this, null);
+                if (member.Value.MemberType == MemberTypes.Property)
+                {
+                    ((PropertyInfo)member.Value).SetValue(this, null, null);
+                }
+                else
+                {
+                    ((FieldInfo)member.Value).SetValue(this, null);
+                }
             }
 
             base.HandleRemovedFromManager(manager);
@@ -377,7 +414,8 @@ namespace Oxide.Plugins
                         return ret;
                     }
 
-                    PrintWarning("Unable to call hook directly: " + method.Name);
+                    Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Error, LogEvent.HookCall, Name, "DirectCallHook method is not patched, falling back to reflection based dispatch.");
+                    hookDispatchFallback = true;
                 }
                 catch (InvalidProgramException ex)
                 {
@@ -407,18 +445,34 @@ namespace Oxide.Plugins
         [HookMethod("OnPluginLoaded")]
         private void base_OnPluginLoaded(Plugin plugin)
         {
-            if (pluginReferenceFields.TryGetValue(plugin.Name, out FieldInfo field))
+            if (pluginReferenceMembers.TryGetValue(plugin.Name, out MemberInfo member))
             {
-                field.SetValue(this, plugin);
+
+                if (member.MemberType == MemberTypes.Property)
+                {
+                    ((PropertyInfo)member).SetValue(this, plugin, null);
+                }
+                else
+                {
+                    ((FieldInfo)member).SetValue(this, plugin);
+                }
             }
         }
 
         [HookMethod("OnPluginUnloaded")]
         private void base_OnPluginUnloaded(Plugin plugin)
         {
-            if (pluginReferenceFields.TryGetValue(plugin.Name, out FieldInfo field))
+            if (pluginReferenceMembers.TryGetValue(plugin.Name, out MemberInfo member))
             {
-                field.SetValue(this, null);
+
+                if (member.MemberType == MemberTypes.Property)
+                {
+                    ((PropertyInfo)member).SetValue(this, null, null);
+                }
+                else
+                {
+                    ((FieldInfo)member).SetValue(this, null);
+                }
             }
         }
 
