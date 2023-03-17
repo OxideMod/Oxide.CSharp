@@ -40,7 +40,7 @@ namespace Oxide.Core.CSharp
 
         private string hook_attribute = typeof(HookMethodAttribute).FullName;
 
-        public DirectCallMethod(ModuleDefinition module, TypeDefinition type)
+        public DirectCallMethod(ModuleDefinition module, TypeDefinition type, ReaderParameters readerParameters)
         {
             this.module = module;
             this.type = type;
@@ -51,7 +51,7 @@ namespace Oxide.Core.CSharp
             stringEquals = module.Import(typeof(string).GetMethod("Equals", new[] { typeof(string) }));
 
             // Copy method definition from base class
-            AssemblyDefinition base_assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll"));
+            AssemblyDefinition base_assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll"), readerParameters);
             ModuleDefinition base_module = base_assembly.MainModule;
             TypeDefinition base_type = module.Import(base_assembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
             MethodDefinition base_method = module.Import(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();

@@ -17,11 +17,20 @@ using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
+using WebSocketSharp;
 
 namespace Oxide.CSharp
 {
     internal class CompilerService
     {
+        private static readonly Dictionary<string, string> _dotnetInstalls = new Dictionary<string, string>()
+        {
+            ["win-x86"] = "https://download.visualstudio.microsoft.com/download/pr/d8163d38-8eca-4ed3-ad81-d25140adf370/9652bb2338e2d7fe2eb53d8d05a2b6ba/dotnet-runtime-7.0.4-win-x86.zip",
+            ["win-x64"] = "https://download.visualstudio.microsoft.com/download/pr/88beaec3-b636-4b17-bdc5-ad8563c11155/0b4e765664b4961b50e167367dcef927/dotnet-runtime-7.0.4-win-x64.zip",
+            ["linux-x64"] = "https://download.visualstudio.microsoft.com/download/pr/08c89e27-b593-438e-8303-af765b90e5da/28b1b06748b86a694ac4ddf43d546a32/dotnet-runtime-7.0.4-linux-x64.tar.gz",
+            ["osx-x64"] = "https://download.visualstudio.microsoft.com/download/pr/e4dd643a-16b8-4f1e-ba38-cdbe32cc24df/67b307accc4abbbc2238310d6ea3c516/dotnet-runtime-7.0.4-osx-x64.tar.gz"
+        };
+
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
@@ -53,8 +62,8 @@ namespace Oxide.CSharp
                     filePath += ".exe";
                     remoteName += "-win.exe";
                     dotnet = "dotnet.exe";
-                    dotnetInstall = "https://dotnet.microsoft.com/download/dotnet/scripts/v1/dotnet-install.ps1";
-                    dotnetInstallScript = "dotnet-install.ps1";
+                    dotnetInstall = _dotnetInstalls[$"win-{arc}"];
+                    dotnetInstallScript = "dotnet-install.zip";
                     break;
 
                 case PlatformID.Unix:
@@ -62,7 +71,7 @@ namespace Oxide.CSharp
                     PlatformID = PlatformID.Unix;
                     remoteName += "-unix";
                     dotnet = "dotnet";
-                    dotnetInstall = "https://download.visualstudio.microsoft.com/download/pr/2431d5ac-f5db-4bb1-bcf0-4a2d9725d4e4/1b0747add72af919754509f83ad08660/dotnet-runtime-7.0.3-linux-x64.tar.gz";
+                    dotnetInstall = _dotnetInstalls[$"linux-x64"];
                     dotnetInstallScript = "dotnet.tar.gz";
                     break;
             }
@@ -641,14 +650,19 @@ namespace Oxide.CSharp
             return false;
         }
 
-        private static bool HasDotNetInstalled(string dotnet, string url, string script)
+        private static bool HasDotNetInstalled(string dotnet, string url, string script, bool forceInstall = false)
         {
+            if (EnvironmentHelper.GetOxideEnvironmentalVariable("ForceDotnetInstall") != null)
+            {
+                forceInstall = true;
+            }
+
             string localDir = Path.Combine(Interface.Oxide.ExtensionDirectory, ".dotnet");
             try
             {
-                bool isInstalled = ScanPath(dotnet, out string fullPath);
-
-                if (!isInstalled)
+                bool isInstalled = ScanPath(dotnet, out string fullPath, forceInstall);
+                bool isGlobal = isInstalled;
+                if (!isInstalled || forceInstall)
                 {
                     fullPath = Path.Combine(localDir, dotnet);
 
@@ -681,6 +695,7 @@ namespace Oxide.CSharp
                             {
                                 prog = "powershell.exe";
                                 args = $"& '{installScript}' -Channel 7.0 -InstallDir \"{localDir}\" -Runtime dotnet -NoPath";
+                                args = $"Expand-Archive -Path \"{installScript}\" -DestinationPath \"{localDir}\" -Force";
                             }
 
                             Process process = Process.Start(new ProcessStartInfo(prog, args));
@@ -697,13 +712,7 @@ namespace Oxide.CSharp
                 }
                 else
                 {
-                    Log(LogType.Info, "Global installation of .NET 7 found");
-
-                    if (Directory.Exists(localDir))
-                    {
-                        Directory.Delete(localDir, true);
-                        Log(LogType.Warning, "Deleting local install of .NET 7 to reclaim disk space");
-                    }
+                    Log(LogType.Info, "A dotnet executable has been found");
                 }
 
                 if (!isInstalled)
@@ -723,7 +732,23 @@ namespace Oxide.CSharp
 
                 string sdksFull = dot.StandardOutput.ReadToEnd();
                 string[] sdks = sdksFull.Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                return sdks != null && sdks.Any(s => s.StartsWith("Microsoft.NETCore.App 7."));
+                bool versionMatch = sdks != null && sdks.Any(s => s.StartsWith("Microsoft.NETCore.App 7.0"));
+
+                if (versionMatch)
+                {
+                    if (isGlobal && !forceInstall)
+                    {
+                        if (Directory.Exists(localDir))
+                        {
+                            Directory.Delete(localDir, true);
+                            Log(LogType.Warning, "Deleting local install of .NET 7 to reclaim disk space");
+                        }
+                    }
+
+                    return true;
+                }
+                
+                return HasDotNetInstalled(dotnet, url, script, true);
             }
             catch (Exception e)
             {
@@ -732,7 +757,7 @@ namespace Oxide.CSharp
             }
         }
 
-        private static bool ScanPath(string file, out string fullPath)
+        private static bool ScanPath(string file, out string fullPath, bool remove = false)
         {
             fullPath = null;
             string[] paths = Environment.GetEnvironmentVariable("PATH").Split(new char[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries);
@@ -743,6 +768,13 @@ namespace Oxide.CSharp
 
                 if (File.Exists(filePath))
                 {
+                    if (remove)
+                    {
+                        List<string> newPaths = paths.ToList();
+                        newPaths.Remove(path);
+                        Environment.SetEnvironmentVariable("PATH", string.Join(Path.PathSeparator.ToString(), newPaths.ToArray()));
+                    }
+
                     fullPath = filePath;
                     return true;
                 }

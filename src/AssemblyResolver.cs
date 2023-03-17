@@ -5,7 +5,7 @@ using References::Mono.Cecil;
 
 namespace Oxide.CSharp
 {
-    internal class AssemblyResolver : BaseAssemblyResolver
+    internal class AssemblyResolver : DefaultAssemblyResolver
     {
         public AssemblyResolver() : base()
         {

@@ -90,7 +90,7 @@ namespace Oxide.Plugins
         {
             if (isPatching)
             {
-                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, Logging.LogEvent.Compile, "CSharp", $"Already patching plugin assembly: {PluginNames.ToSentence()} (ignoring)");
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp", $"Already patching plugin assembly: {PluginNames.ToSentence()} (ignoring)");
                 return;
             }
 
@@ -100,9 +100,10 @@ namespace Oxide.Plugins
                 try
                 {
                     AssemblyDefinition definition = null;
+                    ReaderParameters readerParameters = new ReaderParameters() { AssemblyResolver = new AssemblyResolver() };
                     using (MemoryStream stream = new MemoryStream(RawAssembly))
                     {
-                        definition = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters() { AssemblyResolver = new AssemblyResolver() } );
+                        definition = AssemblyDefinition.ReadAssembly(stream, readerParameters);
                     }
 
                     int foundPlugins = 0;
@@ -145,7 +146,7 @@ namespace Oxide.Plugins
                                 else
                                 {
                                     Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Patching DirectCallMethod on {type.Name}");
-                                    new DirectCallMethod(definition.MainModule, type);
+                                    new DirectCallMethod(definition.MainModule, type, readerParameters);
                                 }
                             }
                         }
@@ -157,7 +158,7 @@ namespace Oxide.Plugins
 
                     using (MemoryStream stream = new MemoryStream())
                     {
-                        definition.Write(stream);
+                        definition.Write(stream, new WriterParameters() { WriteSymbols = false }) ;
                         PatchedAssembly = stream.ToArray();
                     }
 
