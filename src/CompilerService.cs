@@ -113,7 +113,6 @@ namespace Oxide.CSharp
                 ["Compiler:AllowUnsafe"] = "true",
                 ["Compiler:UseStandardLibraries"] = "false",
                 ["Compiler:Force"] = "true",
-                ["Compiler:EnableMessageStream"] = "true",
                 ["Logging:FileName"] = Path.Combine(Interface.Oxide.LogDirectory, "compiler.log"),
 #if DEBUG
                 ["Logging:Level"] = "Debug"
@@ -126,6 +125,8 @@ namespace Oxide.CSharp
             {
                 EnvironmentHelper.SetOxideEnvironmentalVariable(setting.Key, setting.Value);
             }
+
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Compiler:EnableMessageStream", "true", true);
 
             try
             {
