@@ -3,6 +3,7 @@
 using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
+using Oxide.Core.Libraries;
 using Oxide.Core.Logging;
 using Oxide.Logging;
 using Oxide.Plugins;
@@ -109,7 +110,7 @@ namespace Oxide.CSharp
                 return true;
             }
 
-            Stop();
+            Stop(false);
 
             Dictionary<string, string> settings = new Dictionary<string, string>()
             {
@@ -190,15 +191,11 @@ namespace Oxide.CSharp
             client.Message += OnMessage;
             client.Error += OnError;
             client.Start();
-            Interface.Oxide.NextTick(() =>
-            {
-                idleTimer?.Destroy();
-                idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(60, Stop);
-            });
+            ResetIdleTimer();
             return true;
         }
 
-        internal void Stop()
+        internal void Stop(bool synchronous)
         {
             ready = false;
             Process endedProcess = process;
@@ -217,9 +214,9 @@ namespace Oxide.CSharp
 
             if (!endedProcess.HasExited)
             {
-                ThreadPool.QueueUserWorkItem(_ =>
+                stream.PushMessage(new CompilerMessage { Type = CompilerMessageType.Exit });
+                if (synchronous)
                 {
-                    stream.PushMessage(new CompilerMessage { Type = CompilerMessageType.Exit });
                     if (endedProcess.WaitForExit(10000))
                     {
                         Log(LogType.Info, "Compiler shutdown completed");
@@ -233,7 +230,26 @@ namespace Oxide.CSharp
                     stream.Stop();
                     stream = null;
                     endedProcess.Close();
-                });
+                }
+                else
+                {
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        if (endedProcess.WaitForExit(10000))
+                        {
+                            Log(LogType.Info, "Compiler shutdown completed");
+                        }
+                        else
+                        {
+                            Log(LogType.Warning, "Compiler failed to gracefully shutdown, killing the process...");
+                            endedProcess.Kill();
+                        }
+
+                        stream.Stop();
+                        stream = null;
+                        endedProcess.Close();
+                    });
+                }
             }
             else
             {
@@ -248,7 +264,7 @@ namespace Oxide.CSharp
         {
             if (message == null)
             {
-                Stop();
+                Stop(true);
                 return;
             }
 
@@ -313,8 +329,7 @@ namespace Oxide.CSharp
                     compilations.Remove(message.Id);
                     Interface.Oxide.NextTick(() =>
                     {
-                        idleTimer?.Destroy();
-                        idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(60, Stop);
+                        ResetIdleTimer();
                     });
                     break;
 
@@ -338,8 +353,7 @@ namespace Oxide.CSharp
 
                     Interface.Oxide.NextTick(() =>
                     {
-                        idleTimer?.Destroy();
-                        idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(60, Stop);
+                        ResetIdleTimer();
                     });
                     break;
 
@@ -378,8 +392,18 @@ namespace Oxide.CSharp
                     Log(LogType.Warning, "User running server may not have the proper permissions or install is missing files");
                 }
 
-                Stop();
+                Stop(false);
             });
+        }
+
+        private void ResetIdleTimer()
+        {
+            if (idleTimer != null)
+            {
+                idleTimer.Destroy();
+            }
+
+            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(120f, () => Stop(false));
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
@@ -390,7 +414,7 @@ namespace Oxide.CSharp
             compilation.Prepare(() => EnqueueCompilation(compilation));
         }
 
-        internal void OnCompileTimeout() => Stop();
+        internal void OnCompileTimeout() => Stop(false);
 
         private void EnqueueCompilation(Compilation compilation)
         {
@@ -402,7 +426,7 @@ namespace Oxide.CSharp
             if ((!Installed && !Precheck()) || !Start())
             {
                 OnCompilerFailed($"compiler couldn't be started");
-                Stop();
+                Stop(false);
                 return;
             }
 
