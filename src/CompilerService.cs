@@ -3,13 +3,11 @@
 using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
-using Oxide.Core.Libraries;
 using Oxide.Core.Logging;
 using Oxide.Logging;
 using Oxide.Plugins;
 using References::Mono.Unix.Native;
 using System;
-using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -18,7 +16,6 @@ using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
-using WebSocketSharp;
 
 namespace Oxide.CSharp
 {
@@ -44,8 +41,13 @@ namespace Oxide.CSharp
         private string dotnet;
         private string dotnetInstall;
         private string dotnetInstallScript;
+        internal static string runtimePath;
+        private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
         private static PlatformID PlatformID;
         private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
+        private static readonly Regex runtimeRegex = new Regex(@"^(?'RuntimeName'Microsoft\.NETCore\.App) (?'Version'\d+\.\d+\.\d+) \[(?'BasePath'.+)\]$", RegexOptions.Compiled);
+        private static readonly Version mimimumRuntime = new Version(7, 0, 3);
+
         public bool Installed => File.Exists(filePath);
         public CompilerService()
         {
@@ -76,13 +78,21 @@ namespace Oxide.CSharp
                     dotnetInstallScript = "dotnet.tar.gz";
                     break;
             }
+
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Root", Interface.Oxide.RootDirectory);
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Logging", Interface.Oxide.LogDirectory);
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Plugins", Interface.Oxide.PluginDirectory);
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Configuration", Interface.Oxide.ConfigDirectory);
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Data", Interface.Oxide.DataDirectory);
+            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Libraries", Interface.Oxide.ExtensionDirectory);
         }
 
         internal bool Precheck()
         {
             if (HasDotNetInstalled(dotnet, dotnetInstall, dotnetInstallScript))
             {
-                Log(LogType.Info, ".NET 7 is installed, minified version of Oxide.Compiler selected.");
+                Log(LogType.Info, "Selecting minified version of Oxide.Compiler");
+                EnvironmentHelper.SetOxideEnvironmentalVariable("Compiler:FrameworkPath", runtimePath);
             }
             else
             {
@@ -110,34 +120,13 @@ namespace Oxide.CSharp
                 return true;
             }
 
-            Stop(false);
+            Stop(false, "starting new process");
 
-            Dictionary<string, string> settings = new Dictionary<string, string>()
-            {
-                ["Path:Root"] = Interface.Oxide.RootDirectory,
-                ["Path:Logging"] = Interface.Oxide.LogDirectory,
-                ["Path:Plugins"] = Interface.Oxide.PluginDirectory,
-                ["Path:Configuration"] = Interface.Oxide.ConfigDirectory,
-                ["Path:Data"] = Interface.Oxide.DataDirectory,
-                ["Path:Libraries"] = Interface.Oxide.ExtensionDirectory,
-                ["Compiler:AllowUnsafe"] = "true",
-                ["Compiler:UseStandardLibraries"] = "false",
-                ["Compiler:Force"] = "true",
-                ["Logging:FileName"] = Path.Combine(Interface.Oxide.LogDirectory, "compiler.log"),
+            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file compiler_{DateTime.Now.ToString("yyyyMMdd")}.log";
 #if DEBUG
-                ["Logging:Level"] = "Debug"
-#else
-                ["Logging:Level"] = "Information"
+            args += " -v Debug";
 #endif
-            };
-
-            foreach (var setting in settings)
-            {
-                EnvironmentHelper.SetOxideEnvironmentalVariable(setting.Key, setting.Value);
-            }
-
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Compiler:EnableMessageStream", "true", true);
-
+            Log(LogType.Info, $"Starting compiler with parameters: {args}");
             try
             {
                 process = new Process
@@ -148,13 +137,13 @@ namespace Oxide.CSharp
                         CreateNoWindow = true,
                         UseShellExecute = false,
                         RedirectStandardInput = true,
-                        RedirectStandardOutput = true
+                        RedirectStandardOutput = true,
+                        Arguments = args
                     },
                     EnableRaisingEvents = true
                 };
                 process.Exited += OnProcessExited;
                 process.Start();
-                Log(LogType.Info, "Compiler has been started successfully");
             }
             catch (Exception ex)
             {
@@ -192,10 +181,11 @@ namespace Oxide.CSharp
             client.Error += OnError;
             client.Start();
             ResetIdleTimer();
+            Log(LogType.Info, "Compiler has been started successfully");
             return true;
         }
 
-        internal void Stop(bool synchronous)
+        internal void Stop(bool synchronous, string reason)
         {
             ready = false;
             Process endedProcess = process;
@@ -211,6 +201,11 @@ namespace Oxide.CSharp
             endedProcess.Refresh();
             stream.Message -= OnMessage;
             stream.Error -= OnError;
+
+            if (!string.IsNullOrEmpty(reason))
+            {
+                Log(LogType.Warning, $"Shutting down compiler because {reason}");
+            }
 
             if (!endedProcess.HasExited)
             {
@@ -264,7 +259,7 @@ namespace Oxide.CSharp
         {
             if (message == null)
             {
-                Stop(true);
+                //Stop(true, "invalid message sent");
                 return;
             }
 
@@ -327,10 +322,6 @@ namespace Oxide.CSharp
                         compilation.Completed(result.Data, result.Symbols);
                     }
                     compilations.Remove(message.Id);
-                    Interface.Oxide.NextTick(() =>
-                    {
-                        ResetIdleTimer();
-                    });
                     break;
 
                 case CompilerMessageType.Error:
@@ -350,11 +341,6 @@ namespace Oxide.CSharp
                     }
 
                     comp.Completed();
-
-                    Interface.Oxide.NextTick(() =>
-                    {
-                        ResetIdleTimer();
-                    });
                     break;
 
                 case CompilerMessageType.Ready:
@@ -370,6 +356,11 @@ namespace Oxide.CSharp
                     }
                     break;
             }
+
+            Interface.Oxide.NextTick(() =>
+            {
+                ResetIdleTimer();
+            });
         }
 
         private void OnError(Exception exception) => OnCompilerFailed($"Compiler threw a error: {exception.GetType().Name} - {exception.Message}");
@@ -392,7 +383,7 @@ namespace Oxide.CSharp
                     Log(LogType.Warning, "User running server may not have the proper permissions or install is missing files");
                 }
 
-                Stop(false);
+                Stop(false, "process exited");
             });
         }
 
@@ -403,7 +394,7 @@ namespace Oxide.CSharp
                 idleTimer.Destroy();
             }
 
-            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(120f, () => Stop(false));
+            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(120f, () => Stop(false, "idle shutdown"));
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
@@ -414,7 +405,7 @@ namespace Oxide.CSharp
             compilation.Prepare(() => EnqueueCompilation(compilation));
         }
 
-        internal void OnCompileTimeout() => Stop(false);
+        internal void OnCompileTimeout() => Stop(false, "compiler timeout");
 
         private void EnqueueCompilation(Compilation compilation)
         {
@@ -426,7 +417,7 @@ namespace Oxide.CSharp
             if ((!Installed && !Precheck()) || !Start())
             {
                 OnCompilerFailed($"compiler couldn't be started");
-                Stop(false);
+                Stop(false, "failed to start");
                 return;
             }
 
@@ -754,11 +745,39 @@ namespace Oxide.CSharp
 
                 dot.WaitForExit();
 
-                string sdksFull = dot.StandardOutput.ReadToEnd();
-                string[] sdks = sdksFull.Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                bool versionMatch = sdks != null && sdks.Any(s => s.StartsWith("Microsoft.NETCore.App 7.0"));
+                string[] sdks = dot.StandardOutput.ReadToEnd().Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
-                if (versionMatch)
+                string runtimeName = null;
+                Version runtimeVersion = null;
+                string runtimePath = null;
+
+                foreach (var runtime in sdks)
+                {
+                    Match match = runtimeRegex.Match(runtime);
+
+                    if (!match.Success)
+                        continue;
+
+                    string name = match.Groups["RuntimeName"].Value;
+                    Version version = new Version(match.Groups["Version"].Value);
+                    string path = match.Groups["BasePath"].Value;
+
+                    if (runtimeVersion != null && version > runtimeVersion)
+                    {
+                        runtimeName = null;
+                        runtimeVersion = null;
+                        runtimePath = null;
+                    }
+
+                    if (runtimeVersion == null)
+                    {
+                        runtimeName = name;
+                        runtimeVersion = version;
+                        runtimePath = path;
+                    }
+                }
+
+                if (runtimeVersion >= mimimumRuntime)
                 {
                     if (isGlobal && !forceInstall)
                     {
@@ -769,6 +788,8 @@ namespace Oxide.CSharp
                         }
                     }
 
+                    CompilerService.runtimePath = Path.Combine(runtimePath, runtimeVersion.ToString(3));
+                    Log(LogType.Info, $".NET runtime {runtimeVersion.ToString(3)} is installed at '{CompilerService.runtimePath}'");
                     return true;
                 }
                 

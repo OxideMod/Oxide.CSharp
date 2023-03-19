@@ -306,6 +306,6 @@ namespace Oxide.Plugins
             });
         }
 
-        public void OnShutdown() => compiler.Stop(true);
+        public void OnShutdown() => compiler.Stop(true, "framework shutting down");
     }
 }
