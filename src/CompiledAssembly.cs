@@ -106,8 +106,6 @@ namespace Oxide.Plugins
                         definition = AssemblyDefinition.ReadAssembly(stream, readerParameters);
                     }
 
-                    ResolveAll(definition, (AssemblyResolver)readerParameters.AssemblyResolver);
-
                     int foundPlugins = 0;
                     int totalPlugins = CompilablePlugins.Count(p => p.CompilerErrors == null);
                     for (int i = 0; i < definition.MainModule.Types.Count; i++)
@@ -183,49 +181,5 @@ namespace Oxide.Plugins
         }
 
         public bool IsOutdated() => CompilablePlugins.Any(pl => pl.GetLastModificationTime() != CompiledAt);
-
-        private static void ResolveAll(AssemblyDefinition definition, AssemblyResolver resolver)
-        {
-            ResolveAttribute(definition.MainModule, definition.CustomAttributes, resolver);
-
-            foreach (var type in definition.MainModule.Types) ResolveType(definition.MainModule, type, resolver);
-        }
-
-        private static void ResolveAttribute(ModuleDefinition mainModule, IEnumerable<CustomAttribute> attributes, AssemblyResolver resolver)
-        {
-            foreach (CustomAttribute attribute in attributes) ResolveAttribute(mainModule, attribute, resolver);
-        }
-
-        private static void ResolveAttribute(ModuleDefinition mainModule, CustomAttribute attribute, AssemblyResolver resolver)
-        {
-            Type type = Type.GetType(attribute.AttributeType.FullName, false);
-
-            if (type == null)
-            {
-                return;
-            }
-            AssemblyName name = type.Assembly.GetName();
-
-            AssemblyDefinition def = name.Name.Equals("System.Private.CoreLib") ? resolver.mscorlib : resolver.Resolve(new AssemblyNameReference(name.Name, name.Version));
-
-            if (def == null)
-            {
-                return;
-            }
-
-            mainModule.Import(type);
-        }
-
-        private static TypeReference ResolveType(ModuleDefinition mainModule, TypeReference type, AssemblyResolver resolver)
-        {
-            Type t = Type.GetType(type.FullName, false);
-
-            if (t == null)
-            {
-                return type;
-            }
-
-            return mainModule.Import(t);
-        }
     }
 }
