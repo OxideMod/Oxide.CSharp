@@ -14,7 +14,6 @@ namespace Oxide.CSharp
         {
             AddSearchDirectory(Interface.Oxide.ExtensionDirectory);
             mscorlib = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "mscorlib.dll"));
-            AddSearchDirectory(CompilerService.runtimePath);
         }
 
         public override AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)

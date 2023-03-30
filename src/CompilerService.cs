@@ -21,14 +21,7 @@ namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private static readonly Dictionary<string, string> _dotnetInstalls = new Dictionary<string, string>()
-        {
-            ["win-x86"] = "https://download.visualstudio.microsoft.com/download/pr/d8163d38-8eca-4ed3-ad81-d25140adf370/9652bb2338e2d7fe2eb53d8d05a2b6ba/dotnet-runtime-7.0.4-win-x86.zip",
-            ["win-x64"] = "https://download.visualstudio.microsoft.com/download/pr/88beaec3-b636-4b17-bdc5-ad8563c11155/0b4e765664b4961b50e167367dcef927/dotnet-runtime-7.0.4-win-x64.zip",
-            ["linux-x64"] = "https://download.visualstudio.microsoft.com/download/pr/08c89e27-b593-438e-8303-af765b90e5da/28b1b06748b86a694ac4ddf43d546a32/dotnet-runtime-7.0.4-linux-x64.tar.gz",
-            ["osx-x64"] = "https://download.visualstudio.microsoft.com/download/pr/e4dd643a-16b8-4f1e-ba38-cdbe32cc24df/67b307accc4abbbc2238310d6ea3c516/dotnet-runtime-7.0.4-osx-x64.tar.gz"
-        };
-
+        private const string baseUrl = "http://s3.us-west-2.amazonaws.com/cdn.oxidemod.cloud/compiler/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
@@ -38,12 +31,7 @@ namespace Oxide.CSharp
         private ObjectStreamClient<CompilerMessage> client;
         private string filePath;
         private string remoteName;
-        private string dotnet;
-        private string dotnetInstall;
-        private string dotnetInstallScript;
-        internal static string runtimePath;
         private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
-        private static PlatformID PlatformID;
         private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
         private static readonly Regex runtimeRegex = new Regex(@"^(?'RuntimeName'Microsoft\.NETCore\.App) (?'Version'\d+\.\d+\.\d+) \[(?'BasePath'.+)\]$", RegexOptions.Compiled);
         private static readonly Version mimimumRuntime = new Version(7, 0, 3);
@@ -55,27 +43,21 @@ namespace Oxide.CSharp
             messageQueue = new Queue<CompilerMessage>();
             string arc = IntPtr.Size == 8 ? "x64" : "x86";
             filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Compiler");
-            remoteName = $"Compiler.min.{arc}";
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
                 case PlatformID.Win32S:
                 case PlatformID.Win32Windows:
-                    PlatformID = PlatformID.Win32Windows;
                     filePath += ".exe";
-                    remoteName += "-win.exe";
-                    dotnet = "dotnet.exe";
-                    dotnetInstall = _dotnetInstalls[$"win-{arc}"];
-                    dotnetInstallScript = "dotnet-install.zip";
+                    remoteName = baseUrl + $"win-{arc}.Compiler.exe";
+                    break;
+
+                case PlatformID.MacOSX:
+                    remoteName = baseUrl + "osx-x64.Compiler";
                     break;
 
                 case PlatformID.Unix:
-                case PlatformID.MacOSX:
-                    PlatformID = PlatformID.Unix;
-                    remoteName += "-unix";
-                    dotnet = "dotnet";
-                    dotnetInstall = _dotnetInstalls[$"linux-x64"];
-                    dotnetInstallScript = "dotnet.tar.gz";
+                    remoteName = baseUrl + "linux-x64.Compiler";
                     break;
             }
 
@@ -89,18 +71,7 @@ namespace Oxide.CSharp
 
         internal bool Precheck()
         {
-            if (HasDotNetInstalled(dotnet, dotnetInstall, dotnetInstallScript))
-            {
-                Log(LogType.Info, "Selecting minified version of Oxide.Compiler");
-                EnvironmentHelper.SetOxideEnvironmentalVariable("Compiler:FrameworkPath", runtimePath);
-            }
-            else
-            {
-                remoteName = remoteName.Replace(".min", string.Empty);
-                Log(LogType.Info, ".NET 7 not found, packed version of Oxide.Compiler selected.");
-            }
-
-            if (!DownloadFile($"http://cdn.oxidemod.cloud/compiler/{remoteName}", filePath, 3))
+            if (!DownloadFile(remoteName, filePath, 3))
             {
                 return false;
             }
@@ -122,7 +93,7 @@ namespace Oxide.CSharp
 
             Stop(false, "starting new process");
 
-            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file compiler_{DateTime.Now.ToString("yyyyMMdd")}.log";
+            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file compiler_{DateTime.Now.ToString("yyyy-MM-dd")}.log";
 #if DEBUG
             args += " -v Debug";
 #endif
@@ -663,181 +634,6 @@ namespace Oxide.CSharp
                 }
             }
             return false;
-        }
-
-        private static bool HasDotNetInstalled(string dotnet, string url, string script, bool forceInstall = false)
-        {
-            if (EnvironmentHelper.GetOxideEnvironmentalVariable("ForceDotnetInstall") != null)
-            {
-                forceInstall = true;
-            }
-
-            string localDir = Path.Combine(Interface.Oxide.ExtensionDirectory, ".dotnet");
-            try
-            {
-                bool isInstalled = ScanPath(dotnet, out string fullPath, forceInstall);
-                bool isGlobal = isInstalled;
-                if (!isInstalled || forceInstall)
-                {
-                    fullPath = Path.Combine(localDir, dotnet);
-
-                    if (File.Exists(fullPath))
-                    {
-                        Environment.SetEnvironmentVariable("DOTNET_ROOT", localDir);
-                        AppendPathVariable(localDir);
-                        AppendPathVariable(Path.Combine(localDir, "tools"));
-                        Log(LogType.Info, "Local installation of dotnet found");
-                        isInstalled = true;
-                    }
-                    else
-                    {
-                        string installScript = Path.Combine(Interface.Oxide.RootDirectory, script);
-
-                        if (DownloadFile(url, installScript, 2) && SetFilePermissions(installScript))
-                        {
-                            string prog;
-                            string args;
-                            if (PlatformID == PlatformID.Unix)
-                            {
-                                prog = "tar";
-                                args = $"-xzf '{installScript}' -C '{localDir + Path.DirectorySeparatorChar}'";
-                                if (!Directory.Exists(localDir))
-                                {
-                                    Directory.CreateDirectory(localDir);
-                                }
-                            }
-                            else
-                            {
-                                prog = "powershell.exe";
-                                args = $"& '{installScript}' -Channel 7.0 -InstallDir \"{localDir}\" -Runtime dotnet -NoPath";
-                                args = $"Expand-Archive -Path \"{installScript}\" -DestinationPath \"{localDir}\" -Force";
-                            }
-
-                            Process process = Process.Start(new ProcessStartInfo(prog, args));
-                            process.WaitForExit();
-                            Cleanup.Add(installScript);
-
-                            Environment.SetEnvironmentVariable("DOTNET_ROOT", localDir);
-                            AppendPathVariable(localDir);
-                            AppendPathVariable(Path.Combine(localDir, "tools"));
-                            Log(LogType.Info, "Local installation of dotnet downloaded");
-                            isInstalled = true;
-                        }
-                    }
-                }
-                else
-                {
-                    Log(LogType.Info, "A dotnet executable has been found");
-                }
-
-                if (!isInstalled)
-                {
-                    Log(LogType.Error, "Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0");
-                    return false;
-                }
-
-                Process dot = Process.Start(new ProcessStartInfo(fullPath, "--list-runtimes")
-                {
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true
-                });
-
-                dot.WaitForExit();
-
-                string[] sdks = dot.StandardOutput.ReadToEnd().Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-
-                string runtimeName = null;
-                Version runtimeVersion = null;
-                string runtimePath = null;
-
-                foreach (var runtime in sdks)
-                {
-                    Match match = runtimeRegex.Match(runtime);
-
-                    if (!match.Success)
-                        continue;
-
-                    string name = match.Groups["RuntimeName"].Value;
-                    Version version = new Version(match.Groups["Version"].Value);
-                    string path = match.Groups["BasePath"].Value;
-
-                    if (runtimeVersion != null && version > runtimeVersion)
-                    {
-                        runtimeName = null;
-                        runtimeVersion = null;
-                        runtimePath = null;
-                    }
-
-                    if (runtimeVersion == null)
-                    {
-                        runtimeName = name;
-                        runtimeVersion = version;
-                        runtimePath = path;
-                    }
-                }
-
-                if (runtimeVersion >= mimimumRuntime)
-                {
-                    if (isGlobal && !forceInstall)
-                    {
-                        if (Directory.Exists(localDir))
-                        {
-                            Directory.Delete(localDir, true);
-                            Log(LogType.Warning, "Deleting local install of .NET 7 to reclaim disk space");
-                        }
-                    }
-
-                    CompilerService.runtimePath = Path.Combine(runtimePath, runtimeVersion.ToString(3));
-                    Log(LogType.Info, $".NET runtime {runtimeVersion.ToString(3)} is installed at '{CompilerService.runtimePath}'");
-                    return true;
-                }
-                
-                return HasDotNetInstalled(dotnet, url, script, true);
-            }
-            catch (Exception e)
-            {
-                Log(LogType.Error, "Failed to locate or install dotnet please manually install .NET 7 from https://dotnet.microsoft.com/en-us/download/dotnet/7.0", exception: e);
-                return false;
-            }
-        }
-
-        private static bool ScanPath(string file, out string fullPath, bool remove = false)
-        {
-            fullPath = null;
-            string[] paths = Environment.GetEnvironmentVariable("PATH").Split(new char[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (string path in paths)
-            {
-                string filePath = Path.Combine(path, file);
-
-                if (File.Exists(filePath))
-                {
-                    if (remove)
-                    {
-                        List<string> newPaths = paths.ToList();
-                        newPaths.Remove(path);
-                        Environment.SetEnvironmentVariable("PATH", string.Join(Path.PathSeparator.ToString(), newPaths.ToArray()));
-                    }
-
-                    fullPath = filePath;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static void AppendPathVariable(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-            {
-                return;
-            }
-
-            string PATH = Environment.GetEnvironmentVariable("PATH");
-            PATH += Path.PathSeparator + path;
-            Environment.SetEnvironmentVariable("PATH", PATH);
         }
 
         private static void Log(LogType type, string message, Exception exception = null) => Interface.Oxide.RootLogger.WriteDebug(type, LogEvent.Compile, "CSharp", message, exception);

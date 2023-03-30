@@ -10,37 +10,37 @@ namespace Oxide
     /// </summary>
     public static class ExtensionMethods
     {
-public static void WriteDebug(this Logger logger, LogType level, LogEvent? @event, string source, string message, Exception exception = null)
-{
+        public static void WriteDebug(this Logger logger, LogType level, LogEvent? @event, string source, string message, Exception exception = null)
+        {
 #if DEBUG
-    if (string.IsNullOrEmpty(message))
-    {
-        return;
-    }
+            if (string.IsNullOrEmpty(message))
+            {
+                return;
+            }
 
-    string msg = "[DEBUG] ";
+            string msg = "[DEBUG] ";
 
-    if (!string.IsNullOrEmpty(source))
-    {
-        msg += $"[{source}] ";
-    }
+            if (!string.IsNullOrEmpty(source))
+            {
+                msg += $"[{source}] ";
+            }
 
-    if (@event.HasValue)
-    {
-        msg += $"[{@event.Value.Id}] ";
-    }
+            if (@event.HasValue)
+            {
+                msg += $"[{@event.Value.Id}] ";
+            }
 
-    msg += message;
+            msg += message;
 
-    if (exception != null)
-    {
-        Interface.Oxide.RootLogger.WriteException(msg, exception);
-    }
-    else
-    {
-        Interface.Oxide.RootLogger.Write(level, msg);
-    }
+            if (exception != null)
+            {
+                Interface.Oxide.RootLogger.WriteException(msg, exception);
+            }
+            else
+            {
+                Interface.Oxide.RootLogger.Write(level, msg);
+            }
 #endif
-}
+        }
     }
 }
