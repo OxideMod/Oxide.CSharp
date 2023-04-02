@@ -7,6 +7,9 @@ using Oxide.Core.Logging;
 using Oxide.Logging;
 using Oxide.Plugins;
 using References::Mono.Unix.Native;
+using References::Mono.Cecil;
+using References::Mono.Cecil.Cil;
+using References::Mono.Cecil.Rocks;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -28,6 +31,7 @@ namespace Oxide.CSharp
         private volatile int lastId;
         private volatile bool ready;
         private Core.Libraries.Timer.TimerInstance idleTimer;
+        private Core.Libraries.Timer.TimerInstance expireTimer;
         private ObjectStreamClient<CompilerMessage> client;
         private string filePath;
         private string remoteName;
@@ -69,18 +73,100 @@ namespace Oxide.CSharp
             EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Libraries", Interface.Oxide.ExtensionDirectory);
         }
 
+        private void ExpireFileCache()
+        {
+            lock (CompilerFile.FileCache)
+            {
+                object[] toRemove = ArrayPool.Get(CompilerFile.FileCache.Count);
+                int index = 0;
+                DateTime now = DateTime.Now;
+                foreach (var file in CompilerFile.FileCache)
+                {
+                    if (now - file.Value.LastRead > TimeSpan.FromMinutes(3))
+                    {
+                        toRemove[index] = file.Key;
+                        index++;
+                    }
+                }
+
+                for (int i = 0; i < index; i++)
+                {
+                    string key = (string)toRemove[i];
+                    Log(LogType.Info, $"Removing cached dependency {Path.GetFileName(key)}");
+                    CompilerFile.FileCache.Remove(key);
+                }
+
+                ArrayPool.Free(toRemove);
+
+                if (CompilerFile.FileCache.Count == 0)
+                {
+                    expireTimer.Destroy();
+                    expireTimer = null;
+                }
+
+                if (index > 0)
+                {
+                    GC.Collect();
+                }
+            }
+        }
+
         internal bool Precheck()
         {
             if (!DownloadFile(remoteName, filePath, 3))
             {
                 return false;
             }
+#if NET35
+            Log(LogType.Warning, "Attempting to patch mscorlib.dll");
+            AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "mscorlib.dll"));
+            TypeDefinition type = assembly.MainModule.GetType("System", "Type");
+            TypeDefinition boolType = assembly.MainModule.GetType("System", "Boolean");
+            MethodDefinition opEq = new MethodDefinition("op_Equality", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig | MethodAttributes.SpecialName, boolType) { DeclaringType = type };
+            opEq.Parameters.Add(new ParameterDefinition(type) { Name = "left" });
+            opEq.Parameters.Add(new ParameterDefinition(type) { Name = "right" });
+            MethodBody eqBody = new MethodBody(opEq);
+            opEq.Body = eqBody;
+            type.Methods.Add(opEq);
+            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
+            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ceq));
+            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            eqBody.OptimizeMacros();
+            Log(LogType.Info, $"Added method '{opEq.ReturnType} {opEq.FullName}({string.Join(", ", opEq.Parameters.Select(p => $"{p.ParameterType.FullName} {p.Name}").ToArray())})' to type {type.FullName}\n" +
+                $"{string.Join("\n", eqBody.Instructions.Select(i => i.Operand != null ? $"{i.OpCode} -> {i.Operand}" : $"{i.OpCode}").ToArray())}");
+
+
+            MethodDefinition opInEq = new MethodDefinition("op_Inequality", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig | MethodAttributes.SpecialName, boolType) { DeclaringType = type };
+            opInEq.Parameters.Add(new ParameterDefinition(type) { Name = "left" });
+            opInEq.Parameters.Add(new ParameterDefinition(type) { Name = "right" });
+            MethodBody ineqBody = new MethodBody(opInEq);
+            opInEq.Body = ineqBody;
+            type.Methods.Add(opInEq);
+            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
+            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ceq));
+            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ldc_I4_0));
+            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ceq));
+            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            ineqBody.OptimizeMacros();
+            Log(LogType.Info, $"Added method '{opInEq.ReturnType} {opInEq.FullName}({string.Join(", ", opInEq.Parameters.Select(p => $"{p.ParameterType.FullName} {p.Name}").ToArray())})' to type {type.FullName}\n" +
+                $"{string.Join("\n", ineqBody.Instructions.Select(i => i.Operand != null ? $"{i.OpCode} -> {i.Operand}" : $"{i.OpCode}").ToArray())}");
+
+            using (MemoryStream output = new MemoryStream())
+            {
+                assembly.Write(output);
+                CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, "mscorlib.dll", output.ToArray());
+                Log(LogType.Info, "mscorlib.dll has been patched");
+            }
+#endif
 
             return SetFilePermissions(filePath);
         }
 
         private bool Start()
         {
+            expireTimer = Interface.Oxide.GetLibrary<Oxide.Core.Libraries.Timer>().Repeat(35, -1, ExpireFileCache);
             if (filePath == null)
             {
                 return false;
