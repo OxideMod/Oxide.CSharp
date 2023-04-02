@@ -1,6 +1,7 @@
 using ObjectStream.Data;
 using Oxide.Core;
 using Oxide.Core.Logging;
+using Oxide.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -123,16 +124,28 @@ namespace Oxide.Plugins
                     // Include references made by the CSharpPlugins project
                     foreach (string filename in CSharpPluginLoader.PluginReferences)
                     {
+                        bool added = true;
+                        Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Adding default reference: {filename}");
                         if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".dll")))
                         {
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Added default reference: {filename}");
-                            references[filename + ".dll"] = new CompilerFile(Interface.Oxide.ExtensionDirectory, filename + ".dll");
+                            references[filename + ".dll"] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename + ".dll");
+                        }
+                        else if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".exe")))
+                        {
+                            references[filename + ".exe"] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename + ".exe");
+                        }
+                        else if (File.Exists(Path.Combine(Interface.Oxide.RootDirectory, filename + ".exe")))
+                        {
+                            references[filename + ".exe"] = CompilerFile.CachedReadFile(Interface.Oxide.RootDirectory, filename + ".exe");
+                        }
+                        else
+                        {
+                            added = false;
                         }
 
-                        if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".exe")))
+                        if (!added)
                         {
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Added default reference: {filename}");
-                            references[filename + ".exe"] = new CompilerFile(Interface.Oxide.RootDirectory, filename + ".exe");
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Compile, "CSharp", $"Failed to add default reference: {filename} - Not found!");
                         }
                     }
 
@@ -422,13 +435,14 @@ namespace Oxide.Plugins
             string filename = reference.Name + ".dll";
             if (!references.ContainsKey(filename))
             {
-                references[filename] = new CompilerFile(Interface.Oxide.ExtensionDirectory, filename);
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"{reference.Name} has been added as a reference");
+                references[filename] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename);
             }
 
-#if DEBUG
-            Interface.Oxide.LogWarning($"{reference.Name} has been added as a reference");
-#endif
-            plugin.References.Add(reference.Name);
+            if (!plugin.References.Contains(reference.Name))
+            {
+                plugin.References.Add(reference.Name);
+            }
         }
 
         private bool CacheScriptLines(CompilablePlugin plugin)
