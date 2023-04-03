@@ -82,6 +82,11 @@ namespace Oxide.CSharp
                 DateTime now = DateTime.Now;
                 foreach (var file in CompilerFile.FileCache)
                 {
+                    if (file.Value.KeepCached)
+                    {
+                        continue;
+                    }
+
                     if (now - file.Value.LastRead > TimeSpan.FromMinutes(3))
                     {
                         toRemove[index] = file.Key;
@@ -156,7 +161,7 @@ namespace Oxide.CSharp
             using (MemoryStream output = new MemoryStream())
             {
                 assembly.Write(output);
-                CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, "mscorlib.dll", output.ToArray());
+                CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, "mscorlib.dll", output.ToArray()).KeepCached = true;
                 Log(LogType.Info, "mscorlib.dll has been patched");
             }
 #endif
@@ -166,7 +171,7 @@ namespace Oxide.CSharp
 
         private bool Start()
         {
-            expireTimer = Interface.Oxide.GetLibrary<Oxide.Core.Libraries.Timer>().Repeat(35, -1, ExpireFileCache);
+            expireTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Repeat(35, -1, ExpireFileCache);
             if (filePath == null)
             {
                 return false;

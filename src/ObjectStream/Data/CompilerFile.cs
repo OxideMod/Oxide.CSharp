@@ -54,6 +54,9 @@ namespace ObjectStream.Data
         [NonSerialized]
         internal DateTime LastRead;
 
+        [NonSerialized]
+        internal bool KeepCached = false;
+
         internal CompilerFile(string name, byte[] data)
         {
             Name = name;
