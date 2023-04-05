@@ -60,7 +60,7 @@ namespace Oxide.Core.CSharp
             method = new MethodDefinition(base_method.Name, base_method.Attributes, base_module.Import(base_method.ReturnType)) { DeclaringType = type };
             foreach (ParameterDefinition parameter in base_method.Parameters)
             {
-                ParameterDefinition new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, base_module.Import(parameter.ParameterType))
+                ParameterDefinition new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, module.Import(parameter.ParameterType))
                 {
                     IsOut = parameter.IsOut,
                     Constant = parameter.Constant,
