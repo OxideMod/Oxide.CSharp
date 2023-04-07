@@ -105,7 +105,7 @@ namespace Oxide.CSharp
 
                 if (CompilerFile.FileCache.Count == 0)
                 {
-                    expireTimer.Destroy();
+                    expireTimer?.Destroy();
                     expireTimer = null;
                 }
 
