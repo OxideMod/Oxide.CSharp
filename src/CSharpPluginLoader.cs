@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
@@ -19,6 +20,7 @@ namespace Oxide.Plugins
         private static CSharpExtension extension;
         private static Dictionary<string, CompilablePlugin> plugins = new Dictionary<string, CompilablePlugin>();
         private static readonly string[] AssemblyBlacklist = { "Newtonsoft.Json", "protobuf-net", "websocket-sharp" };
+        private Core.Libraries.Timer timer { get; } = Interface.Oxide.GetLibrary<Core.Libraries.Timer>();
 
         public static CompilablePlugin GetCompilablePlugin(string directory, string name)
         {
@@ -105,7 +107,7 @@ namespace Oxide.Plugins
             }
 
             // Attempt to compile the plugin before unloading the old version
-            Load(compilablePlugin);
+            timer.Once(0.5f, () => Load(compilablePlugin));
 
             return null;
         }

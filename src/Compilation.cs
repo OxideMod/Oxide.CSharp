@@ -125,7 +125,7 @@ namespace Oxide.Plugins
                     foreach (string filename in CSharpPluginLoader.PluginReferences)
                     {
                         bool added = true;
-                        Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Adding default reference: {filename}");
+                        //Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Adding default reference: {filename}");
                         if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".dll")))
                         {
                             references[filename + ".dll"] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename + ".dll");
