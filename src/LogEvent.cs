@@ -24,5 +24,7 @@
         public static LogEvent Compile { get; } = new LogEvent(4, "Compile");
 
         public static LogEvent HookCall { get; } = new LogEvent(10, "ExecuteHook");
+
+        public static LogEvent Patch { get; } = new LogEvent(23, "Patching");
     }
 }

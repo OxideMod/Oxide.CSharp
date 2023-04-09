@@ -4,12 +4,13 @@ using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
 using Oxide.Core.Logging;
+using Oxide.CSharp.Patching;
 using Oxide.Logging;
 using Oxide.Plugins;
-using References::Mono.Unix.Native;
 using References::Mono.Cecil;
 using References::Mono.Cecil.Cil;
 using References::Mono.Cecil.Rocks;
+using References::Mono.Unix.Native;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -25,6 +26,7 @@ namespace Oxide.CSharp
     internal class CompilerService
     {
         private const string baseUrl = "http://s3.us-west-2.amazonaws.com/cdn.oxidemod.cloud/compiler/";
+        private static string[] IgnoredFilePrefixes = new string[] { "Oxide", "System", "mscorlib", "Unity" };
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
@@ -165,8 +167,47 @@ namespace Oxide.CSharp
                 Log(LogType.Info, "mscorlib.dll has been patched");
             }
 #endif
-
+            PatchGameFiles();
             return SetFilePermissions(filePath);
+        }
+
+        private static void PatchGameFiles()
+        {
+            DirectoryInfo libs = new DirectoryInfo(Interface.Oxide.ExtensionDirectory);
+            AssemblyResolver resolver = new AssemblyResolver();
+            ReaderParameters reader = new ReaderParameters()
+            {
+                AssemblyResolver = resolver
+            };
+
+            foreach (FileInfo file in libs.GetFiles("*.dll"))
+            {
+                if (IgnoredFilePrefixes.Any(pre => file.Name.StartsWith(pre, StringComparison.InvariantCultureIgnoreCase)))
+                {
+                    Log(LogType.Info, $"Not patching {file.Name}");
+                    continue;
+                }
+
+                try
+                {
+                    // TODO: Support multiple patches
+                    AssemblyDefinition assem = AssemblyDefinition.ReadAssembly(file.FullName, reader);
+                    Publicize pub = new Publicize();
+                    if (pub.TryPatch(assem.MainModule))
+                    {
+                        using (MemoryStream ms = new MemoryStream())
+                        {
+                            assem.Write(ms);
+                            CompilerFile.CachedReadFile(file.Directory.FullName, file.Name, ms.ToArray()).KeepCached = true;
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    Log(LogType.Error, $"Failed to read {file.FullName}");
+                    // Handle?
+                }
+            }
         }
 
         private bool Start()
