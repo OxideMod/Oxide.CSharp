@@ -23,9 +23,6 @@
     </PackageReference>
     <None Include="..\resources\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Patching\" />
-  </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <Target Name="ChangeAliasesOfStrongNameAssemblies" BeforeTargets="FindReferenceAssembliesForReferences;ResolveReferences">
     <ItemGroup>
