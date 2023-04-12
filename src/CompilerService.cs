@@ -4,12 +4,8 @@ using ObjectStream;
 using ObjectStream.Data;
 using Oxide.Core;
 using Oxide.Core.Logging;
-using Oxide.CSharp.Patching;
 using Oxide.Logging;
 using Oxide.Plugins;
-using References::Mono.Cecil;
-using References::Mono.Cecil.Cil;
-using References::Mono.Cecil.Rocks;
 using References::Mono.Unix.Native;
 using System;
 using System.Collections.Generic;
@@ -25,8 +21,7 @@ namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private const string baseUrl = "http://s3.us-west-2.amazonaws.com/cdn.oxidemod.cloud/compiler/";
-        private static string[] IgnoredFilePrefixes = new string[] { "Oxide", "System", "mscorlib", "Unity" };
+        private const string baseUrl = "http://cdn.oxidemod.cloud/compiler/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
@@ -39,10 +34,8 @@ namespace Oxide.CSharp
         private string remoteName;
         private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
         private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
-        private static readonly Regex runtimeRegex = new Regex(@"^(?'RuntimeName'Microsoft\.NETCore\.App) (?'Version'\d+\.\d+\.\d+) \[(?'BasePath'.+)\]$", RegexOptions.Compiled);
-        private static readonly Version mimimumRuntime = new Version(7, 0, 3);
-
         public bool Installed => File.Exists(filePath);
+
         public CompilerService()
         {
             compilations = new Hash<int, Compilation>();
@@ -124,90 +117,8 @@ namespace Oxide.CSharp
             {
                 return false;
             }
-#if NET35
-            Log(LogType.Warning, "Attempting to patch mscorlib.dll");
-            AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "mscorlib.dll"));
-            TypeDefinition type = assembly.MainModule.GetType("System", "Type");
-            TypeDefinition boolType = assembly.MainModule.GetType("System", "Boolean");
-            MethodDefinition opEq = new MethodDefinition("op_Equality", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig | MethodAttributes.SpecialName, boolType) { DeclaringType = type };
-            opEq.Parameters.Add(new ParameterDefinition(type) { Name = "left" });
-            opEq.Parameters.Add(new ParameterDefinition(type) { Name = "right" });
-            MethodBody eqBody = new MethodBody(opEq);
-            opEq.Body = eqBody;
-            type.Methods.Add(opEq);
-            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
-            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ceq));
-            eqBody.Instructions.Add(Instruction.Create(OpCodes.Ret));
-            eqBody.OptimizeMacros();
-            Log(LogType.Info, $"Added method '{opEq.ReturnType} {opEq.FullName}({string.Join(", ", opEq.Parameters.Select(p => $"{p.ParameterType.FullName} {p.Name}").ToArray())})' to type {type.FullName}\n" +
-                $"{string.Join("\n", eqBody.Instructions.Select(i => i.Operand != null ? $"{i.OpCode} -> {i.Operand}" : $"{i.OpCode}").ToArray())}");
 
-
-            MethodDefinition opInEq = new MethodDefinition("op_Inequality", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig | MethodAttributes.SpecialName, boolType) { DeclaringType = type };
-            opInEq.Parameters.Add(new ParameterDefinition(type) { Name = "left" });
-            opInEq.Parameters.Add(new ParameterDefinition(type) { Name = "right" });
-            MethodBody ineqBody = new MethodBody(opInEq);
-            opInEq.Body = ineqBody;
-            type.Methods.Add(opInEq);
-            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
-            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ceq));
-            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ldc_I4_0));
-            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ceq));
-            ineqBody.Instructions.Add(Instruction.Create(OpCodes.Ret));
-            ineqBody.OptimizeMacros();
-            Log(LogType.Info, $"Added method '{opInEq.ReturnType} {opInEq.FullName}({string.Join(", ", opInEq.Parameters.Select(p => $"{p.ParameterType.FullName} {p.Name}").ToArray())})' to type {type.FullName}\n" +
-                $"{string.Join("\n", ineqBody.Instructions.Select(i => i.Operand != null ? $"{i.OpCode} -> {i.Operand}" : $"{i.OpCode}").ToArray())}");
-
-            using (MemoryStream output = new MemoryStream())
-            {
-                assembly.Write(output);
-                CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, "mscorlib.dll", output.ToArray()).KeepCached = true;
-                Log(LogType.Info, "mscorlib.dll has been patched");
-            }
-#endif
-            PatchGameFiles();
             return SetFilePermissions(filePath);
-        }
-
-        private static void PatchGameFiles()
-        {
-            DirectoryInfo libs = new DirectoryInfo(Interface.Oxide.ExtensionDirectory);
-            AssemblyResolver resolver = new AssemblyResolver();
-            ReaderParameters reader = new ReaderParameters()
-            {
-                AssemblyResolver = resolver
-            };
-
-            foreach (FileInfo file in libs.GetFiles("*.dll"))
-            {
-                if (IgnoredFilePrefixes.Any(pre => file.Name.StartsWith(pre, StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    Log(LogType.Info, $"Not patching {file.Name}");
-                    continue;
-                }
-
-                try
-                {
-                    // TODO: Support multiple patches
-                    AssemblyDefinition assem = AssemblyDefinition.ReadAssembly(file.FullName, reader);
-                    Publicize pub = new Publicize();
-                    if (pub.TryPatch(assem.MainModule))
-                    {
-                        using (MemoryStream ms = new MemoryStream())
-                        {
-                            assem.Write(ms);
-                            CompilerFile.CachedReadFile(file.Directory.FullName, file.Name, ms.ToArray()).KeepCached = true;
-                        }
-                    }
-                }
-                catch (Exception)
-                {
-                    Log(LogType.Error, $"Failed to read {file.FullName}");
-                    // Handle?
-                }
-            }
         }
 
         private bool Start()
@@ -388,7 +299,9 @@ namespace Oxide.CSharp
                             }
 
                             if (match.Groups["Severity"].Value != "Error")
+                            {
                                 continue;
+                            }
 
                             string fileName = match.Groups["File"].Value;
                             string scriptName = Path.GetFileNameWithoutExtension(fileName);

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Oxide.CSharp.Patching;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -27,10 +28,12 @@ namespace ObjectStream.Data
                     return file;
                 }
             }
-            
+
+            bool isPatched = false;
+
             if (data == null && File.Exists(fullPath))
             {
-                data = File.ReadAllBytes(fullPath);
+                data = Patcher.Run(File.ReadAllBytes(fullPath), out isPatched);
             }
 
             if (data == null)
@@ -40,6 +43,7 @@ namespace ObjectStream.Data
 
             file = new CompilerFile(fileName, data);
             file.LastRead = DateTime.Now;
+            file.KeepCached = isPatched;
             lock (FileCache)
             {
                 FileCache[fullPath] = file;
