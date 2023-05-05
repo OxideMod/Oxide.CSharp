@@ -41,7 +41,7 @@ namespace Oxide.CSharp
             compilations = new Hash<int, Compilation>();
             messageQueue = new Queue<CompilerMessage>();
             string arc = IntPtr.Size == 8 ? "x64" : "x86";
-            filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Compiler");
+            filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Oxide.Compiler");
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
