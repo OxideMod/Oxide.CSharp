@@ -136,7 +136,7 @@ namespace Oxide.CSharp
 
             Stop(false, "starting new process");
 
-            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file compiler_{DateTime.Now.ToString("yyyy-MM-dd")}.log";
+            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file compiler_{DateTime.Now:yyyy-MM-dd}.log";
 #if DEBUG
             args += " -v Debug";
 #endif
@@ -195,7 +195,7 @@ namespace Oxide.CSharp
             client.Error += OnError;
             client.Start();
             ResetIdleTimer();
-            Log(LogType.Info, "Compiler has been started successfully");
+            Log(LogType.Info, $"Started Oxide.Compiler v{GetCompilerVersion()} successfully");
             return true;
         }
 
@@ -682,5 +682,16 @@ namespace Oxide.CSharp
         }
 
         private static void Log(LogType type, string message, Exception exception = null) => Interface.Oxide.RootLogger.WriteDebug(type, LogEvent.Compile, "CSharp", message, exception);
+
+        private string GetCompilerVersion()
+        {
+            if (!Installed)
+            {
+                return "0.0.0";
+            }
+
+            FileVersionInfo version = FileVersionInfo.GetVersionInfo(filePath);
+            return version.FileVersion;
+        }
     }
 }
