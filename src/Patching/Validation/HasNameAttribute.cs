@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.CSharp.Patching.Validation
 {
-    public class NameValidationAttribute : PatchValidationAttribute
+    public class HasNameAttribute : PatchValidationAttribute
     {
         public string ValidationRule { get; }
 
@@ -14,14 +14,14 @@ namespace Oxide.CSharp.Patching.Validation
 
         public StringComparison ValidationComparison { get; }
 
-        public NameValidationAttribute(string rule, StringValidationType type = StringValidationType.StartsWith, StringComparison comparison = StringComparison.InvariantCultureIgnoreCase)
+        public HasNameAttribute(string rule, StringValidationType type = StringValidationType.StartsWith, StringComparison comparison = StringComparison.InvariantCultureIgnoreCase)
         {
             ValidationRule = rule;
             ValidationType = type;
             ValidationComparison = comparison;
         }
 
-        public override bool IsValid(object item)
+        protected override bool IsValid(object item)
         {
             string name = null;
 

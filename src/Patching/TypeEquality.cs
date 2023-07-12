@@ -9,10 +9,10 @@ using System.Linq;
 
 namespace Oxide.CSharp.Patching
 {
-    [NameValidation("mscorlib")]
+    [HasName("mscorlib")]
     public class TypeEquality : TraversePatch
     {
-        [NameValidation("System.Type", StringValidationType.Equals, System.StringComparison.InvariantCulture)]
+        [HasName("System.Type", StringValidationType.Equals, System.StringComparison.InvariantCulture)]
         protected override bool OnTypeDefinition(TypeDefinition type)
         {
             bool changed = false;

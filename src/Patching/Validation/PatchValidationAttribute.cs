@@ -6,7 +6,11 @@ namespace Oxide.CSharp.Patching.Validation
     [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
     public abstract class PatchValidationAttribute : Attribute
     {
-        public abstract bool IsValid(object item);
+        public bool InverseCheck { get; set; }
+
+        protected abstract bool IsValid(object item);
+
+        public bool Validate(object item) => InverseCheck ? !IsValid(item) : IsValid(item);
 
         protected static T GetPropertyValue<T>(object instance, string name, T defaultValue = default, BindingFlags flags = BindingFlags.Public | BindingFlags.Instance)
         {

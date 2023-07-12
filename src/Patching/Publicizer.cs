@@ -5,21 +5,22 @@ using References::Mono.Cecil;
 
 namespace Oxide.CSharp.Patching
 {
-    [InverseNameValidation("0Harmony")]
-    [InverseNameValidation("System")]
-    [InverseNameValidation("Microsoft")]
-    [InverseNameValidation("mscorlib")]
-    [InverseNameValidation("Unity")]
-    [InverseNameValidation("Mono")]
-    [InverseNameValidation("netstandard")]
-    [InverseNameValidation("Oxide")]
-    [InverseNameValidation("MySql.Data")]
+    [HasName("0Harmony", InverseCheck = true)]
+    [HasName("System", InverseCheck = true)]
+    [HasName("Microsoft", InverseCheck = true)]
+    [HasName("mscorlib", InverseCheck = true)]
+    [HasName("Unity", InverseCheck = true)]
+    [HasName("Mono", InverseCheck = true)]
+    [HasName("netstandard", InverseCheck = true)]
+    [HasName("Oxide", InverseCheck = true)]
+    [HasName("MySql.Data", InverseCheck = true)]
+    [HasEnvironmentalVariable("AllowPublicize")]
     public class Publicizer : TraversePatch
     {
         [HasVisability(false)]
-        [SkipSpecialName]
-        [DoesNotHaveAttribute("CompilerGeneratedAttribute", StringValidationType.EndsWith)]
-        [DoesNotHaveAttribute("CompilerServices.ExtensionAttribute", StringValidationType.EndsWith)]
+        [IsSpecialName(InverseCheck = false)]
+        [HasAttribute("CompilerGeneratedAttribute", StringValidationType.EndsWith, InverseCheck = true)]
+        [HasAttribute("CompilerServices.ExtensionAttribute", StringValidationType.EndsWith, InverseCheck = true)]
         protected override bool OnMemberDefinition(IMemberDefinition member)
         {
             return base.OnMemberDefinition(member);

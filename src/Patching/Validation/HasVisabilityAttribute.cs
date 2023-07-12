@@ -17,7 +17,7 @@ namespace Oxide.CSharp.Patching.Validation
             IsPublic = isPublic;
         }
 
-        public override bool IsValid(object item)
+        protected override bool IsValid(object item)
         {
             if (item is TypeDefinition type)
             {

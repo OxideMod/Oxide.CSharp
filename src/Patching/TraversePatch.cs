@@ -215,9 +215,8 @@ namespace Oxide.CSharp.Patching
 
             foreach (PatchValidationAttribute valid in validations)
             {
-                if (!valid.IsValid(member))
+                if (!valid.Validate(member))
                 {
-                    Type type = valid.GetType();
                     return false;
                 }
             }

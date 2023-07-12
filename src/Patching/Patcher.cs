@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 
 using Oxide.Core;
 using Oxide.Core.Logging;
@@ -71,7 +71,7 @@ namespace Oxide.CSharp.Patching
                 for (int n = 0; n < validators.Count; n++)
                 {
                     PatchValidationAttribute valid = validators[n];
-                    bool pass = valid.IsValid(module);
+                    bool pass = valid.Validate(module);
                     // Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher", $"Validation {valid.GetType().Name}: {(pass ? "passed" : "failed")}");
                     if (!pass)
                     {
@@ -101,7 +101,7 @@ namespace Oxide.CSharp.Patching
 
             return context.TotalPatches > 0;
         }
-        
+
         public static byte[] Run(byte[] data, out bool patched)
         {
             try
@@ -120,7 +120,7 @@ namespace Oxide.CSharp.Patching
                         }
                     }
                 }
-                    
+
             }
             catch (Exception e)
             {

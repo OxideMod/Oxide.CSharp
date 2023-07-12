@@ -4,16 +4,16 @@ using References::Mono.Cecil;
 
 namespace Oxide.CSharp.Patching.Validation
 {
-    public class SkipHideBySig : PatchValidationAttribute
+    public class IsHideBySig : PatchValidationAttribute
     {
-        public override bool IsValid(object item)
+        protected override bool IsValid(object item)
         {
             if (item is IMemberDefinition)
             {
-                return !GetPropertyValue(item, "IsHideBySig", false);
+                return GetPropertyValue(item, "IsHideBySig", false);
             }
 
-            return true;
+            return false;
         }
     }
 }
