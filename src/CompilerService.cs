@@ -14,6 +14,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 
@@ -21,7 +23,7 @@ namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private const string baseUrl = "http://cdn.oxidemod.cloud/compiler/";
+        private const string baseUrl = "http://downloads.oxidemod.dev/artifacts/Oxide.Compiler/develop/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
@@ -548,11 +550,13 @@ namespace Oxide.CSharp
         {
             string fileName = Path.GetFileName(path);
             int retry = 0;
+            string md5 = null;
             try
             {
                 DateTime? last = null;
                 if (File.Exists(path))
                 {
+                    md5 = GenerateFileHash(path);
                     last = File.GetLastWriteTimeUtc(path);
                     Log(LogType.Info, $"{fileName} already exists, checking for updates. . .");
                 }
@@ -564,7 +568,7 @@ namespace Oxide.CSharp
                 byte[] data;
                 int code;
                 bool newerFound;
-                if (!TryDownload(url, retries, ref retry, last, out data, out code, out newerFound))
+                if (!TryDownload(url, retries, ref retry, last, out data, out code, out newerFound, ref md5))
                 {
                     string attemptVerb = retries == 1 ? "attempt" : "attempts";
                     Log(LogType.Error, $"Failed to download {fileName} after {retry} {attemptVerb} with response code '{code}', please manually download it from {url} and save it here {path}");
@@ -582,6 +586,7 @@ namespace Oxide.CSharp
                     {
                         fs.Write(data, 0, data.Length);
                     }
+
                     Log(LogType.Info, $"Latest version of {fileName} has been downloaded");
                 }
 
@@ -594,7 +599,7 @@ namespace Oxide.CSharp
             }
         }
 
-        private static bool TryDownload(string url, int retries, ref int current, DateTime? lastModified, out byte[] data, out int code, out bool newerFound)
+        private static bool TryDownload(string url, int retries, ref int current, DateTime? lastModified, out byte[] data, out int code, out bool newerFound, ref string md5)
         {
             newerFound = true;
             data = null;
@@ -604,7 +609,25 @@ namespace Oxide.CSharp
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
                 request.AllowAutoRedirect = true;
 
-                if (lastModified.HasValue)
+                if (!string.IsNullOrEmpty(md5))
+                {
+                    int md5retries = 0;
+                    string servermd5 = null;
+                    if (TryDownload(url + ".md5", retries, ref md5retries, null, out byte[] md5data, out int md5code, out bool _, ref servermd5) && md5code == 200)
+                    {
+                        servermd5 = Encoding.UTF8.GetString(md5data).Trim();
+
+                        Log(LogType.Info, $"Local MD5: {md5} Server MD5: {servermd5}");
+
+                        if (servermd5.Equals(md5, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            Log(LogType.Info, $"MD5 of {url} matches local copy");
+                            newerFound = false;
+                            return true;
+                        }
+                    }
+                }
+                else if (lastModified.HasValue)
                 {
                     request.IfModifiedSince = lastModified.Value;
                 }
@@ -626,13 +649,14 @@ namespace Oxide.CSharp
                         {
                             current++;
                             Thread.Sleep(1000);
-                            return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound);
+                            return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound, ref md5);
                         }
                         else
                         {
                             return false;
                         }
                 }
+
                 MemoryStream fs = new MemoryStream();
                 Stream stream = response.GetResponseStream();
                 int bufferSize = 10000;
@@ -651,6 +675,7 @@ namespace Oxide.CSharp
                 fs.Close();
                 stream.Close();
                 response.Close();
+
                 return true;
             }
             catch (WebException webex)
@@ -669,7 +694,7 @@ namespace Oxide.CSharp
                             {
                                 current++;
                                 Thread.Sleep(1000);
-                                return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound);
+                                return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound, ref md5);
                             }
                             else
                             {
@@ -692,6 +717,15 @@ namespace Oxide.CSharp
 
             FileVersionInfo version = FileVersionInfo.GetVersionInfo(filePath);
             return version.FileVersion;
+        }
+
+        private static string GenerateFileHash(string file)
+        {
+            using (MD5 md5 = MD5.Create())
+            using (FileStream stream = File.OpenRead(file))
+            {
+                return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
+            }
         }
     }
 }
