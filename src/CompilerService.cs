@@ -23,7 +23,7 @@ namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private const string baseUrl = "http://downloads.oxidemod.dev/artifacts/Oxide.Compiler/develop/";
+        private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/develop/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
