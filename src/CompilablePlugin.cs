@@ -51,6 +51,12 @@ namespace Oxide.Plugins
                     return;
                 }
 
+                if (!typeof(CSharpPlugin).IsAssignableFrom(type))
+                {
+                    InitFailed("Main plugin class is not assignable to `CSharpPlugin`");
+                    return;
+                }
+
                 CSharpPlugin plugin;
                 try
                 {
@@ -64,12 +70,12 @@ namespace Oxide.Plugins
                 catch (TargetInvocationException invocationException)
                 {
                     Exception ex = invocationException.InnerException;
-                    InitFailed($"Unable to load {ScriptName}. {ex.ToString()}");
+                    InitFailed($"Unable to load {ScriptName}. {ex}");
                     return;
                 }
                 catch (Exception ex)
                 {
-                    InitFailed($"Unable to load {ScriptName}. {ex.ToString()}");
+                    InitFailed($"Unable to load {ScriptName}. {ex}");
                     return;
                 }
 

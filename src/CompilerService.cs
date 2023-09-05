@@ -441,6 +441,8 @@ namespace Oxide.CSharp
 
             compilation.Started();
 
+            HashSet<string> includedFiles = new HashSet<string>();
+
             List<CompilerFile> sourceFiles = new List<CompilerFile>();
             foreach (CompilablePlugin plugin in compilation.plugins)
             {
@@ -452,16 +454,25 @@ namespace Oxide.CSharp
                     continue;
                 }
 
-                foreach (var include in plugin.IncludePaths.Distinct())
+                foreach (string include in plugin.IncludePaths.Distinct())
                 {
-                    CompilerFile inc = new CompilerFile(include);
-                    if (inc.Data == null || inc.Data.Length == 0)
+                    if (includedFiles.Contains(include))
                     {
-                        Log(LogType.Warning, $"Ignoring plugin {inc.Name}, file is empty");
+                        Log(LogType.Warning, $"Tried to include {include} but it has already been added to the compilation");
                         continue;
                     }
-                    Log(LogType.Info, $"Adding {inc.Name} to compilation project");
-                    sourceFiles.Add(inc);
+
+                    CompilerFile includeFile = new CompilerFile(include);
+                    if (includeFile.Data == null || includeFile.Data.Length == 0)
+                    {
+                        Log(LogType.Warning, $"Ignoring plugin {includeFile.Name}, file is empty");
+                        continue;
+                    }
+
+                    Log(LogType.Info, $"Adding {includeFile.Name} to compilation project");
+
+                    sourceFiles.Add(includeFile);
+                    includedFiles.Add(include);
                 }
 
                 Log(LogType.Info, $"Adding plugin {name} to compilation project");
@@ -470,7 +481,7 @@ namespace Oxide.CSharp
 
             if (sourceFiles.Count == 0)
             {
-                Log(LogType.Error, $"Compilation job contained no valid plugins");
+                Log(LogType.Error, "Compilation job contained no valid plugins");
                 compilations.Remove(compilation.id);
                 compilation.Completed();
                 return;
