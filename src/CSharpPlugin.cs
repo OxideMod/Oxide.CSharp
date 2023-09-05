@@ -224,51 +224,47 @@ namespace Oxide.Plugins
             Type type = GetType();
             foreach (MemberInfo member in type.GetMembers(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                if (member.MemberType != MemberTypes.Property && member.MemberType != MemberTypes.Field)
+                if (member.MemberType == MemberTypes.Property || member.MemberType == MemberTypes.Field)
                 {
-                    continue;
-                }
+                    if (member.MemberType == MemberTypes.Property)
+                    {
+                        PropertyInfo property = member as PropertyInfo;
+                        if (!property.CanWrite)
+                        {
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        FieldInfo field = member as FieldInfo;
+                    }
 
-                if (member.MemberType == MemberTypes.Property)
+                    object[] reference_attributes = member.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
+
+                    if (reference_attributes.Length > 0)
+                    {
+                        PluginReferenceAttribute pluginReference = reference_attributes[0] as PluginReferenceAttribute;
+                        pluginReferenceMembers[pluginReference.Name ?? member.Name] = member;
+                    }
+                }
+                else if (member.MemberType == MemberTypes.Method)
                 {
-                    PropertyInfo property = member as PropertyInfo;
-                    if (!property.CanWrite)
+                    MethodInfo method = member as MethodInfo;
+                    object[] info_attributes = method.GetCustomAttributes(typeof(HookMethodAttribute), true);
+                    if (info_attributes.Length > 0)
                     {
                         continue;
                     }
-                }
-                else
-                {
-                    FieldInfo field = member as FieldInfo;
-                    if (field.IsInitOnly)
+
+                    if (method.Name.Equals("OnFrame"))
                     {
-                        continue;
+                        HookedOnFrame = true;
                     }
-                }
-
-                object[] reference_attributes = member.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
-                if (reference_attributes.Length > 0)
-                {
-                    PluginReferenceAttribute pluginReference = reference_attributes[0] as PluginReferenceAttribute;
-                    pluginReferenceMembers[pluginReference.Name ?? member.Name] = member;
-                }
-            }
-            foreach (MethodInfo method in type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
-            {
-                object[] info_attributes = method.GetCustomAttributes(typeof(HookMethodAttribute), true);
-                if (info_attributes.Length > 0)
-                {
-                    continue;
-                }
-
-                if (method.Name.Equals("OnFrame"))
-                {
-                    HookedOnFrame = true;
-                }
-                // Assume all private instance methods which are not explicitly hooked could be hooks
-                if (method.DeclaringType.Name == type.Name)
-                {
-                    AddHookMethod(method.Name, method);
+                    // Assume all private instance methods which are not explicitly hooked could be hooks
+                    if (method.DeclaringType.Name == type.Name)
+                    {
+                        AddHookMethod(method.Name, method);
+                    }
                 }
             }
         }
