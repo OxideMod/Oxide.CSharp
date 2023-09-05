@@ -13,7 +13,7 @@ namespace ObjectStream.Data
             Version = CompilerLanguageVersion.Preview;
             LoadDefaultReferences = false;
             SdkVersion = "2";
-            Encoding = System.Text.Encoding.Default.WebName;
+            Encoding = System.Text.Encoding.UTF8.WebName;
             Debug = false;
         }
 
