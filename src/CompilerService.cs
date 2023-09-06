@@ -381,7 +381,7 @@ namespace Oxide.CSharp
             });
         }
 
-        private void OnError(Exception exception) => OnCompilerFailed($"Compiler threw a error: {exception.GetType().Name} - {exception.Message}");
+        private void OnError(Exception exception) => OnCompilerFailed($"Compiler threw a error: {exception}");
 
         private void OnProcessExited(object sender, EventArgs eventArgs)
         {
