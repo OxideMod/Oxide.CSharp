@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 
 using ObjectStream;
 using ObjectStream.Data;
@@ -23,7 +23,7 @@ namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/develop/";
+        private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/master/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
