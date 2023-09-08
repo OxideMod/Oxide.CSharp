@@ -18,12 +18,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Oxide.Core.Extensions;
 
 namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/master/";
+        private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
         private Process process;
@@ -37,36 +38,37 @@ namespace Oxide.CSharp
         private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
         public bool Installed => File.Exists(filePath);
 
-        public CompilerService()
+        public CompilerService(Extension extension)
         {
             compilations = new Hash<int, Compilation>();
             messageQueue = new Queue<CompilerMessage>();
             string arc = IntPtr.Size == 8 ? "x64" : "x86";
             filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Oxide.Compiler");
+            string downloadUrl = string.Format(baseUrl, extension.Branch);
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
                 case PlatformID.Win32S:
                 case PlatformID.Win32Windows:
                     filePath += ".exe";
-                    remoteName = baseUrl + $"win-{arc}.Compiler.exe";
+                    remoteName = downloadUrl + $"win-{arc}.Compiler.exe";
                     break;
 
                 case PlatformID.MacOSX:
-                    remoteName = baseUrl + "osx-x64.Compiler";
+                    remoteName = downloadUrl + "osx-x64.Compiler";
                     break;
 
                 case PlatformID.Unix:
-                    remoteName = baseUrl + "linux-x64.Compiler";
+                    remoteName = downloadUrl + "linux-x64.Compiler";
                     break;
             }
 
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Root", Interface.Oxide.RootDirectory);
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Logging", Interface.Oxide.LogDirectory);
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Plugins", Interface.Oxide.PluginDirectory);
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Configuration", Interface.Oxide.ConfigDirectory);
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Data", Interface.Oxide.DataDirectory);
-            EnvironmentHelper.SetOxideEnvironmentalVariable("Path:Libraries", Interface.Oxide.ExtensionDirectory);
+            EnvironmentHelper.SetVariable("Path:Root", Interface.Oxide.RootDirectory);
+            EnvironmentHelper.SetVariable("Path:Logging", Interface.Oxide.LogDirectory);
+            EnvironmentHelper.SetVariable("Path:Plugins", Interface.Oxide.PluginDirectory);
+            EnvironmentHelper.SetVariable("Path:Configuration", Interface.Oxide.ConfigDirectory);
+            EnvironmentHelper.SetVariable("Path:Data", Interface.Oxide.DataDirectory);
+            EnvironmentHelper.SetVariable("Path:Libraries", Interface.Oxide.ExtensionDirectory);
         }
 
         private void ExpireFileCache()
@@ -592,7 +594,7 @@ namespace Oxide.CSharp
                     {
                         fs.Write(data, 0, data.Length);
                     }
-                    
+
                     if (newerFound)
                     {
                         string checkVerb = md5 != null ? $"Remote MD5: {md5}" : "Newer found";

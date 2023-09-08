@@ -42,7 +42,7 @@ namespace Oxide.Plugins
         {
             Instance = this;
             CSharpPluginLoader.extension = extension;
-            compiler = new CompilerService();
+            compiler = new CompilerService(extension);
         }
 
         public void OnModLoaded()

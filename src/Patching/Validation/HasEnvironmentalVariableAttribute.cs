@@ -12,6 +12,6 @@ namespace Oxide.CSharp.Patching.Validation
             VariableName = rule ?? throw new ArgumentNullException(nameof(rule));
         }
 
-        protected override bool IsValid(object item) => !string.IsNullOrEmpty(EnvironmentHelper.GetOxideEnvironmentalVariable(VariableName));
+        protected override bool IsValid(object item) => !string.IsNullOrEmpty(EnvironmentHelper.GetVariable(VariableName));
     }
 }
