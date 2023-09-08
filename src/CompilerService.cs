@@ -99,7 +99,7 @@ namespace Oxide.CSharp
 
                 if (index <= 0) return;
 
-                Interface.Oxide.LogWarning($"[CSharp] Released {index} cached compiler dependencies, running garbage collection. . .");
+                //Interface.Oxide.LogWarning($"[CSharp] Released {index} cached compiler dependencies, running garbage collection. . .");
                 GC.Collect();
             }
         }
@@ -332,6 +332,12 @@ namespace Oxide.CSharp
                         compilation.Completed(result.Data, result.Symbols);
                     }
                     compilations.Remove(message.Id);
+
+                    if (compilations.Count == 0)
+                    {
+                        Stop(false, "no more jobs");
+                    }
+
                     break;
 
                 case CompilerMessageType.Error:
@@ -406,7 +412,7 @@ namespace Oxide.CSharp
                 idleTimer.Destroy();
             }
 
-            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(3600f, () => Stop(false, "idle shutdown"));
+            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(300f, () => Stop(false, "idle shutdown"));
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
