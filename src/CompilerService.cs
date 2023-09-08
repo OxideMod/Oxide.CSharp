@@ -30,7 +30,6 @@ namespace Oxide.CSharp
         private volatile int lastId;
         private volatile bool ready;
         private Core.Libraries.Timer.TimerInstance idleTimer;
-        private Core.Libraries.Timer.TimerInstance expireTimer;
         private ObjectStreamClient<CompilerMessage> client;
         private string filePath;
         private string remoteName;
@@ -76,7 +75,6 @@ namespace Oxide.CSharp
             {
                 object[] toRemove = ArrayPool.Get(CompilerFile.FileCache.Count);
                 int index = 0;
-                DateTime now = DateTime.Now;
                 foreach (var file in CompilerFile.FileCache)
                 {
                     if (file.Value.KeepCached)
@@ -84,11 +82,8 @@ namespace Oxide.CSharp
                         continue;
                     }
 
-                    if (now - file.Value.LastRead > TimeSpan.FromMinutes(3))
-                    {
-                        toRemove[index] = file.Key;
-                        index++;
-                    }
+                    toRemove[index] = file.Key;
+                    index++;
                 }
 
                 for (int i = 0; i < index; i++)
@@ -100,16 +95,10 @@ namespace Oxide.CSharp
 
                 ArrayPool.Free(toRemove);
 
-                if (CompilerFile.FileCache.Count == 0)
-                {
-                    expireTimer?.Destroy();
-                    expireTimer = null;
-                }
+                if (index <= 0) return;
 
-                if (index > 0)
-                {
-                    GC.Collect();
-                }
+                Interface.Oxide.LogWarning($"[CSharp] Released {index} cached compiler dependencies, running garbage collection. . .");
+                GC.Collect();
             }
         }
 
@@ -125,7 +114,6 @@ namespace Oxide.CSharp
 
         private bool Start()
         {
-            expireTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Repeat(35, -1, ExpireFileCache);
             if (filePath == null)
             {
                 return false;
@@ -197,7 +185,7 @@ namespace Oxide.CSharp
             client.Error += OnError;
             client.Start();
             ResetIdleTimer();
-            Log(LogType.Info, $"Started Oxide.Compiler v{GetCompilerVersion()} successfully");
+            Interface.Oxide.LogInfo($"[CSharp] Started Oxide.Compiler v{GetCompilerVersion()} successfully");
             return true;
         }
 
@@ -269,6 +257,8 @@ namespace Oxide.CSharp
                 endedProcess.Close();
                 Log(LogType.Info, "Released compiler resources");
             }
+
+            ExpireFileCache();
         }
 
         private void OnMessage(ObjectStreamConnection<CompilerMessage, CompilerMessage> connection, CompilerMessage message)
@@ -414,7 +404,7 @@ namespace Oxide.CSharp
                 idleTimer.Destroy();
             }
 
-            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(120f, () => Stop(false, "idle shutdown"));
+            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(3600f, () => Stop(false, "idle shutdown"));
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
@@ -572,11 +562,18 @@ namespace Oxide.CSharp
                 {
                     md5 = GenerateFileHash(path);
                     last = File.GetLastWriteTimeUtc(path);
-                    Log(LogType.Info, $"{fileName} already exists, checking for updates. . .");
+                    string msg = $"[CSharp] Checking for updates for {fileName} | Local MD5: {md5}";
+
+                    if (last.HasValue)
+                    {
+                        msg += $" | Last modified: {last.Value:yyyy-MM-dd HH:mm:ss}";
+                    }
+
+                    Interface.Oxide.LogInfo(msg);
                 }
                 else
                 {
-                    Interface.Oxide.LogInfo($"Downloading {fileName}. . .");
+                    Interface.Oxide.LogInfo($"[CSharp] Downloading {fileName}. . .");
                 }
 
                 byte[] data;
@@ -585,13 +582,8 @@ namespace Oxide.CSharp
                 if (!TryDownload(url, retries, ref retry, last, out data, out code, out newerFound, ref md5))
                 {
                     string attemptVerb = retries == 1 ? "attempt" : "attempts";
-                    Interface.Oxide.LogError($"Failed to download {fileName} after {retry} {attemptVerb} with response code '{code}', please manually download it from {url} and save it here {path}");
+                    Interface.Oxide.LogError($"[CSharp] Failed to download {fileName} after {retry} {attemptVerb} with response code '{code}', please manually download it from {url} and save it here {path}");
                     return false;
-                }
-
-                if (!newerFound)
-                {
-                    Log(LogType.Info, $"Latest version of {fileName} already exists");
                 }
 
                 if (data != null)
@@ -600,8 +592,20 @@ namespace Oxide.CSharp
                     {
                         fs.Write(data, 0, data.Length);
                     }
-
-                    Interface.Oxide.LogInfo($"Latest version of {fileName} has been downloaded");
+                    
+                    if (newerFound)
+                    {
+                        string checkVerb = md5 != null ? $"Remote MD5: {md5}" : "Newer found";
+                        Interface.Oxide.LogInfo($"[CSharp] Downloaded newer version of {fileName} | {checkVerb}");
+                    }
+                    else
+                    {
+                        Interface.Oxide.LogInfo($"[CSharp] Downloaded {fileName}");
+                    }
+                }
+                else
+                {
+                    Interface.Oxide.LogInfo($"[CSharp] {fileName} is up to date");
                 }
 
                 return true;
@@ -630,15 +634,18 @@ namespace Oxide.CSharp
                     if (TryDownload(url + ".md5", retries, ref md5retries, null, out byte[] md5data, out int md5code, out bool _, ref servermd5) && md5code == 200)
                     {
                         servermd5 = Encoding.UTF8.GetString(md5data).Trim();
-
-                        Log(LogType.Info, $"Local MD5: {md5} Server MD5: {servermd5}");
-
+                        md5 = servermd5;
                         if (servermd5.Equals(md5, StringComparison.InvariantCultureIgnoreCase))
                         {
-                            Log(LogType.Info, $"MD5 of {url} matches local copy");
                             newerFound = false;
                             return true;
                         }
+                    }
+                    else if (lastModified.HasValue)
+                    {
+                        md5 = null;
+                        Log(LogType.Warning, $"Failed to download {url}.md5 after {md5retries} attempts with response code '{md5code}', using last modified date instead");
+                        request.IfModifiedSince = lastModified.Value;
                     }
                 }
                 else if (lastModified.HasValue)
