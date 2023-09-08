@@ -63,7 +63,6 @@ namespace Oxide.Plugins
 
         internal void Started()
         {
-            startedAt = Interface.Oxide.Now;
             name = (plugins.Count < 2 ? plugins.First().Name : "plugins_") + Math.Round(Interface.Oxide.Now * 10000000f) + ".dll";
         }
 

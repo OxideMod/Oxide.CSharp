@@ -369,7 +369,9 @@ namespace Oxide.CSharp
                         ready = true;
                         while (messageQueue.Count > 0)
                         {
-                            connection.PushMessage(messageQueue.Dequeue());
+                            CompilerMessage msg = messageQueue.Dequeue();
+                            compilations[msg.Id].startedAt = Interface.Oxide.Now;
+                            connection.PushMessage(msg);
                         }
                     }
                     break;
@@ -497,6 +499,7 @@ namespace Oxide.CSharp
             CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
             if (ready)
             {
+                compilation.startedAt = Interface.Oxide.Now;
                 client.PushMessage(message);
             }
             else
