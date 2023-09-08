@@ -87,7 +87,7 @@ namespace Oxide.Plugins
             Interface.Oxide.NextTick(() =>
             {
                 timeoutTimer?.Destroy();
-                timeoutTimer = timer.Once(60f, OnCompilationTimeout);
+                timeoutTimer = timer.Once(Math.Max(30, Loader.LoadingPlugins.Count * 3), OnCompilationTimeout);
             });
         }
 
