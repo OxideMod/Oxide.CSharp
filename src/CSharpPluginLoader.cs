@@ -1,4 +1,4 @@
-﻿using Oxide.Core;
+using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Logging;
 using Oxide.CSharp;
@@ -13,7 +13,7 @@ namespace Oxide.Plugins
 {
     public class CSharpPluginLoader : PluginLoader
     {
-        public static string[] DefaultReferences = { "mscorlib", "Oxide.Core", "Oxide.CSharp", "System", "System.Core", "System.Data", "System.Xml" };
+        public static string[] DefaultReferences = { "mscorlib", "Oxide.Core", "Oxide.CSharp", "Oxide.Common", "System", "System.Core", "System.Data", "System.Xml" };
         public static HashSet<string> PluginReferences = new HashSet<string>(DefaultReferences);
         public static CSharpPluginLoader Instance;
 
