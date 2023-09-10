@@ -37,6 +37,7 @@ namespace Oxide.CSharp
         private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
         private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
         public bool Installed => File.Exists(filePath);
+        private float startTime;
 
         public CompilerService(Extension extension)
         {
@@ -127,10 +128,10 @@ namespace Oxide.CSharp
             }
 
             Stop(false, "starting new process");
-
-            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file compiler_{DateTime.Now:yyyy-MM-dd}.log";
+            startTime = Interface.Oxide.Now;
+            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file \"{Path.Combine(Interface.Oxide.LogDirectory, $"oxide.compiler_{DateTime.Now:yyyy-MM-dd}.log")}\"";
 #if DEBUG
-            args += " -v Debug";
+            args += " -v debug";
 #endif
             Log(LogType.Info, $"Starting compiler with parameters: {args}");
             try
@@ -360,8 +361,24 @@ namespace Oxide.CSharp
                     break;
 
                 case CompilerMessageType.Ready:
-                    Log(LogType.Info, "Compiler sent the ready signal, starting compilations. . .");
+                    string logMessage = $"Ready signal received from compiler (Startup took: {Math.Round((Interface.Oxide.Now - startTime) * 1000f)}ms)";
+                    switch (messageQueue.Count)
+                    {
+                            case 0:
+                                Log(LogType.Info, logMessage);
+                                break;
+
+                            case 1:
+                                Log(LogType.Info, logMessage + ", sending compilation. . .");
+                                break;
+
+                            default:
+                                Log(LogType.Info, logMessage + $", sending {messageQueue.Count} compilations. . .");
+                                break;
+                    }
+
                     connection.PushMessage(message);
+
                     if (!ready)
                     {
                         ready = true;
@@ -492,6 +509,9 @@ namespace Oxide.CSharp
                 OutputFile = compilation.name,
                 SourceFiles = sourceFiles.ToArray(),
                 ReferenceFiles = compilation.references.Values.ToArray()
+                #if DEBUG
+                , Debug = true
+                #endif
             };
 
             CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
