@@ -1,4 +1,4 @@
-using Oxide.Core;
+﻿using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Logging;
 using Oxide.CSharp;
@@ -252,11 +252,6 @@ namespace Oxide.Plugins
         {
             LoadingPlugins.Remove(plugin.Name);
             plugin.IsLoading = false;
-
-            if (plugin.CompilerErrors != null && plugin.CompilerErrors.StartsWith("Timed out waiting for compilation"))
-            {
-                compiler.OnCompileTimeout();
-            }
 
             foreach (string loadingName in LoadingPlugins.ToArray())
             {
