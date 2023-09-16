@@ -314,6 +314,9 @@ namespace Oxide.Plugins
                 Watcher.AddMapping(Name);
             }
 
+            Manager.OnPluginAdded += OnPluginLoaded;
+            Manager.OnPluginRemoved += OnPluginUnloaded;
+
             foreach (var member in pluginReferenceMembers)
             {
                 if (member.Value.MemberType == MemberTypes.Property)
@@ -352,6 +355,9 @@ namespace Oxide.Plugins
             }
 
             Watcher.RemoveMapping(Name);
+
+            Manager.OnPluginAdded -= OnPluginLoaded;
+            Manager.OnPluginRemoved -= OnPluginUnloaded;
 
             foreach (var member in pluginReferenceMembers)
             {
@@ -438,8 +444,7 @@ namespace Oxide.Plugins
             throw new PluginLoadFailure(reason);
         }
 
-        [HookMethod("OnPluginLoaded")]
-        private void base_OnPluginLoaded(Plugin plugin)
+        private void OnPluginLoaded(Plugin plugin)
         {
             if (pluginReferenceMembers.TryGetValue(plugin.Name, out MemberInfo member))
             {
@@ -455,8 +460,7 @@ namespace Oxide.Plugins
             }
         }
 
-        [HookMethod("OnPluginUnloaded")]
-        private void base_OnPluginUnloaded(Plugin plugin)
+        private void OnPluginUnloaded(Plugin plugin)
         {
             if (pluginReferenceMembers.TryGetValue(plugin.Name, out MemberInfo member))
             {
