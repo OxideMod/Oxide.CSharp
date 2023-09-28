@@ -144,11 +144,13 @@ namespace Oxide.Plugins
 
                         if (!added)
                         {
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Compile, "CSharp", $"Failed to add default reference: {filename} - Not found!");
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"Failed to add default reference: {filename} - Not found!");
                         }
                     }
 
-                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Preparing compilation");
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Preparing compilation");
+
+                    List<CompilablePlugin> pluginsToAdd = new List<CompilablePlugin>();
 
                     while (queuedPlugins.TryDequeue(out CompilablePlugin plugin))
                     {
@@ -162,19 +164,20 @@ namespace Oxide.Plugins
                             plugin.References.Clear();
                             plugin.IncludePaths.Clear();
                             plugin.Requires.Clear();
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Compile, "CSharp", $"Script file is empty: {plugin.Name}");
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"Script file is empty: {plugin.Name}");
                             RemovePlugin(plugin);
                         }
-                        else if (plugins.Add(plugin))
+
+                        if (pluginsToAdd.Contains(plugin))
                         {
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Added plugin to compilation: {plugin.Name}");
-                            PreparseScript(plugin);
-                            ResolveReferences(plugin);
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"Plugin is already part of the compilation: {plugin.Name}");
+                            continue;
                         }
-                        else
-                        {
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Compile, "CSharp", $"Plugin is already part of the compilation: {plugin.Name}");
-                        }
+
+                        pluginsToAdd.Add(plugin);
+
+                        PreparseScript(plugin);
+                        ResolveReferences(plugin);
 
                         CacheModifiedScripts();
 
@@ -184,7 +187,21 @@ namespace Oxide.Plugins
                             Current = null;
                         }
                     }
-                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Done preparing compilation: {plugins.Select(p => p.Name).ToSentence()}");
+
+                    pluginsToAdd.Sort((x, y) => string.Compare(x.Name, y.Name, StringComparison.Ordinal));
+
+                    foreach (CompilablePlugin plugin in pluginsToAdd)
+                    {
+                        if (!plugins.Add(plugin))
+                        {
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"Failed to add plugin to compilation: {plugin.Name}");
+                            continue;
+                        }
+
+                        Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Added plugin to compilation: {plugin.Name}");
+                    }
+
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Done preparing compilation: {plugins.Select(p => p.Name).ToSentence()}");
 
                     callback();
                 }
