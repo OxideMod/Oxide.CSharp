@@ -168,16 +168,17 @@ namespace Oxide.Plugins
                             RemovePlugin(plugin);
                         }
 
-                        if (pluginsToAdd.Contains(plugin))
+                        if (!pluginsToAdd.Contains(plugin))
+                        {
+                            pluginsToAdd.Add(plugin);
+
+                            PreparseScript(plugin);
+                            ResolveReferences(plugin);
+                        }
+                        else
                         {
                             Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"Plugin is already part of the compilation: {plugin.Name}");
-                            continue;
                         }
-
-                        pluginsToAdd.Add(plugin);
-
-                        PreparseScript(plugin);
-                        ResolveReferences(plugin);
 
                         CacheModifiedScripts();
 
