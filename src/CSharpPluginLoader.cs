@@ -106,8 +106,15 @@ namespace Oxide.Plugins
                 return null;
             }
 
-            // Attempt to compile the plugin before unloading the old version
-            timer.Once(0.5f, () => Load(compilablePlugin));
+            if (LoadedPlugins.ContainsKey(compilablePlugin.Name))
+            {
+                // Attempt to compile the plugin before unloading the old version
+                timer.Once(0.5f, () => Load(compilablePlugin));
+            }
+            else
+            {
+                Load(compilablePlugin);
+            }
 
             return null;
         }
@@ -173,6 +180,8 @@ namespace Oxide.Plugins
 
         public void Load(CompilablePlugin plugin)
         {
+            PluginLoadingStarted(plugin);
+
             plugin.Compile(compiled =>
             {
                 if (!compiled)
@@ -244,7 +253,11 @@ namespace Oxide.Plugins
         public void PluginLoadingStarted(CompilablePlugin plugin)
         {
             // Let the Oxide core know that this plugin will be loading asynchronously
-            LoadingPlugins.Add(plugin.Name);
+            if (!LoadingPlugins.Contains(plugin.Name))
+            {
+                LoadingPlugins.Add(plugin.Name);
+            }
+
             plugin.IsLoading = true;
         }
 
