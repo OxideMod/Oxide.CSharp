@@ -334,10 +334,10 @@ namespace Oxide.CSharp
                     }
                     compilations.Remove(message.Id);
 
-                    if (compilations.Count == 0)
-                    {
-                        Stop(false, "no more jobs");
-                    }
+                    // if (compilations.Count == 0)
+                    // {
+                    //     Stop(false, "no more jobs");
+                    // }
 
                     break;
 
