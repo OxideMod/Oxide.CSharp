@@ -24,6 +24,7 @@ namespace Oxide.CSharp
 {
     internal class CompilerService
     {
+        private static readonly Regex SymbolEscapeRegex = new Regex(@"[^\w\d]", RegexOptions.Compiled);
         private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
         private Hash<int, Compilation> compilations;
         private Queue<CompilerMessage> messageQueue;
@@ -38,6 +39,7 @@ namespace Oxide.CSharp
         private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
         public bool Installed => File.Exists(filePath);
         private float startTime;
+        private string[] preprocessor = null;
 
         public CompilerService(Extension extension)
         {
@@ -97,16 +99,49 @@ namespace Oxide.CSharp
                 }
 
                 ArrayPool.Free(toRemove);
-
-                if (index <= 0) return;
-
-                //Interface.Oxide.LogWarning($"[CSharp] Released {index} cached compiler dependencies, running garbage collection. . .");
-                GC.Collect();
             }
         }
 
         internal bool Precheck()
         {
+            List<string> preprocessorList = new List<string>()
+            {
+                "OXIDE",
+                "OXIDEMOD"
+            };
+
+            Extension game = Interface.Oxide.GetAllExtensions().SingleOrDefault(e => e.IsGameExtension);
+
+            if (game != null)
+            {
+                string name = game.Name.ToUpperInvariant();
+                string branch = game.Branch?.ToUpperInvariant() ?? "PUBLIC";
+                preprocessorList.Add(EscapeSymbolName(name));
+                preprocessorList.Add(EscapeSymbolName(name + "_" + branch));
+
+                if (game.Version != default)
+                {
+                    preprocessorList.Add(EscapeSymbolName(name + "_" + game.Version));
+                    preprocessorList.Add(EscapeSymbolName(name + "_" + game.Version + "_" + branch));
+                }
+            }
+
+#if DEBUG
+            preprocessorList.Add("DEBUG");
+#endif
+
+            if (Interface.Oxide.Config.Compiler.PreprocessorDirectives.Count > 0)
+            {
+                preprocessorList.AddRange(Interface.Oxide.Config.Compiler.PreprocessorDirectives);
+            }
+
+            preprocessor = preprocessorList.Distinct().ToArray();
+
+#if DEBUG
+            Log(LogType.Debug, $"Preprocessors are: {string.Join(", ", preprocessor)}");
+#endif
+
+
             if (!DownloadFile(remoteName, filePath, 3))
             {
                 return false;
@@ -511,12 +546,13 @@ namespace Oxide.CSharp
             {
                 OutputFile = compilation.name,
                 SourceFiles = sourceFiles.ToArray(),
-                ReferenceFiles = compilation.references.Values.ToArray()
+                ReferenceFiles = compilation.references.Values.ToArray(),
+                Preprocessor = preprocessor
                 #if DEBUG
                 , Debug = true
                 #endif
             };
-
+            
             CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
             if (ready)
             {
@@ -778,6 +814,16 @@ namespace Oxide.CSharp
             {
                 return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
             }
+        }
+
+        /// <summary>
+        /// This allows to handle cases where injected symbols have inappropriate characters (e.g. git branches can have "/", "-" etc. while #define disallows them)
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        private string EscapeSymbolName(string name)
+        {
+            return SymbolEscapeRegex.Replace(name, "_");
         }
     }
 }

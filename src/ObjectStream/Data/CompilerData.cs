@@ -28,5 +28,6 @@ namespace ObjectStream.Data
         public CompilerLanguageVersion Version { get; set; }
         public string Encoding { get; set; }
         public bool Debug { get; set; }
+        public string[] Preprocessor { get; set; }
     }
 }

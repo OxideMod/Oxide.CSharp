@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text.RegularExpressions;
 using System.Threading;
 
@@ -16,7 +15,6 @@ namespace Oxide.Plugins
     internal class Compilation
     {
         public static Compilation Current;
-        private static readonly Regex SymbolEscapeRegex = new Regex(@"[^\w\d]", RegexOptions.Compiled);
 
         internal int id;
         internal string name;
@@ -32,9 +30,6 @@ namespace Oxide.Plugins
 
         private string includePath;
         private string[] extensionNames;
-        private string gameExtensionNamespace;
-        private readonly string gameExtensionName;
-        private readonly string gameExtensionBranch;
 
         internal Compilation(int id, Action<Compilation> callback, CompilablePlugin[] plugins)
         {
@@ -55,10 +50,6 @@ namespace Oxide.Plugins
 
             includePath = Path.Combine(Interface.Oxide.PluginDirectory, "include");
             extensionNames = Interface.Oxide.GetAllExtensions().Select(ext => ext.Name).ToArray();
-            Core.Extensions.Extension gameExtension = Interface.Oxide.GetAllExtensions().SingleOrDefault(ext => ext.IsGameExtension);
-            gameExtensionName = gameExtension?.Name.ToUpper();
-            gameExtensionNamespace = gameExtension?.GetType().Namespace;
-            gameExtensionBranch = gameExtension?.Branch?.ToUpper();
         }
 
         internal void Started()
@@ -488,18 +479,6 @@ namespace Oxide.Plugins
                                 lines.Add(reader.ReadLine());
                             }
 
-                            if (!string.IsNullOrEmpty(gameExtensionName))
-                            {
-                                string gameExtensionNameEscaped = EscapeSymbolName(gameExtensionName);
-                                lines.Insert(0, $"#define {gameExtensionNameEscaped}");
-
-                                if (!string.IsNullOrEmpty(gameExtensionBranch) && gameExtensionBranch != "public")
-                                {
-                                    string gameExtensionBranchEscaped = EscapeSymbolName(gameExtensionBranch);
-                                    lines.Insert(0, $"#define {gameExtensionNameEscaped}{gameExtensionBranchEscaped}");
-                                }
-                            }
-
                             plugin.ScriptLines = lines.ToArray();
                             plugin.ScriptEncoding = reader.CurrentEncoding;
                         }
@@ -559,16 +538,6 @@ namespace Oxide.Plugins
                     RemovePlugin(requiredPlugin);
                 }
             }
-        }
-
-        /// <summary>
-        /// This allows to handle cases where injected symbols have inappropriate characters (e.g. git branches can have "/", "-" etc. while #define disallows them)
-        /// </summary>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        private string EscapeSymbolName(string name)
-        {
-            return SymbolEscapeRegex.Replace(name, "_");
         }
     }
 }
