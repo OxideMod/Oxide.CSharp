@@ -334,10 +334,10 @@ namespace Oxide.CSharp
                     }
                     compilations.Remove(message.Id);
 
-                    // if (compilations.Count == 0)
-                    // {
-                    //     Stop(false, "no more jobs");
-                    // }
+                    if (!Interface.Oxide.Config.Compiler.IdleShutdown && compilations.Count == 0)
+                    {
+                        Stop(false, "no more jobs");
+                    }
 
                     break;
 
@@ -429,7 +429,10 @@ namespace Oxide.CSharp
                 idleTimer.Destroy();
             }
 
-            idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(300f, () => Stop(false, "idle shutdown"));
+            if (Interface.Oxide.Config.Compiler.IdleShutdown)
+            {
+                idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(Interface.Oxide.Config.Compiler.IdleTimeout, () => Stop(false, "idle shutdown"));
+            }
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
