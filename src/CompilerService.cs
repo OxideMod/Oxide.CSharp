@@ -369,11 +369,6 @@ namespace Oxide.CSharp
                     }
                     compilations.Remove(message.Id);
 
-                    if (!Interface.Oxide.Config.Compiler.IdleShutdown && compilations.Count == 0)
-                    {
-                        Stop(false, "no more jobs");
-                    }
-
                     break;
 
                 case CompilerMessageType.Error:
@@ -552,7 +547,7 @@ namespace Oxide.CSharp
                 , Debug = true
                 #endif
             };
-            
+
             CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
             if (ready)
             {
