@@ -14,6 +14,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Cache;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -160,6 +161,28 @@ namespace Oxide.CSharp
             if (process != null && process.Handle != IntPtr.Zero && !process.HasExited)
             {
                 return true;
+            }
+
+            try
+            {
+                int attempts = 0;
+                while (!File.Exists(filePath))
+                {
+                    attempts++;
+                    if (attempts > 3)
+                    {
+                        throw new IOException($"Compiler failed to download after 3 attempts");
+                    }
+
+                    Log(LogType.Error, $"Compiler doesn't exist at {filePath}, attempting to download again | Attempt: {attempts} of 3");
+                    Precheck();
+                    Thread.Sleep(100);
+                }
+            }
+            catch (Exception e)
+            {
+                Log(LogType.Error, e.Message);
+                return false;
             }
 
             Stop(false, "starting new process");
@@ -688,20 +711,37 @@ namespace Oxide.CSharp
             {
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
                 request.AllowAutoRedirect = true;
+                request.CachePolicy = new RequestCachePolicy(RequestCacheLevel.NoCacheNoStore);
 
                 if (!string.IsNullOrEmpty(md5))
                 {
+                    string md5msg = $"Validating checksum with server for {Path.GetFileName(url)} | Local: {md5}";
                     int md5retries = 0;
                     string servermd5 = null;
                     if (TryDownload(url + ".md5", retries, ref md5retries, null, out byte[] md5data, out int md5code, out bool _, ref servermd5) && md5code == 200)
                     {
+
                         servermd5 = Encoding.UTF8.GetString(md5data).Trim();
-                        md5 = servermd5;
+
+                        if (string.IsNullOrEmpty(servermd5))
+                        {
+                            servermd5 = "N/A";
+                        }
+
+                        md5msg += $" | Server: {servermd5}";
+
                         if (servermd5.Equals(md5, StringComparison.InvariantCultureIgnoreCase))
                         {
+                            md5 = servermd5;
                             newerFound = false;
+                            md5msg += " | Match!";
+                            Log(LogType.Debug, md5msg);
                             return true;
                         }
+
+                        md5 = servermd5;
+                        md5msg += " | No Match!";
+                        Log(LogType.Warning, md5msg);
                     }
                     else if (lastModified.HasValue)
                     {
