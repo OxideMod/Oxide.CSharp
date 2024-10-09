@@ -6,6 +6,7 @@ using Oxide.Core;
 using Oxide.Core.Logging;
 using Oxide.Logging;
 using Oxide.Plugins;
+using Oxide.Pooling;
 using References::Mono.Unix.Native;
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Oxide.Core.Extensions;
+using Oxide.IO;
+using Oxide.IO.TransportMethods;
 
 namespace Oxide.CSharp
 {
@@ -33,7 +36,8 @@ namespace Oxide.CSharp
         private volatile int lastId;
         private volatile bool ready;
         private Core.Libraries.Timer.TimerInstance idleTimer;
-        private ObjectStreamClient<CompilerMessage> client;
+        // private ObjectStreamClient<CompilerMessage> client;
+        private MessageBroker<CompilerMessage> compilerStream;
         private string filePath;
         private string remoteName;
         private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
@@ -79,7 +83,7 @@ namespace Oxide.CSharp
         {
             lock (CompilerFile.FileCache)
             {
-                object[] toRemove = ArrayPool.Get(CompilerFile.FileCache.Count);
+                object[] toRemove = ArrayPool<object>.Shared.Take(CompilerFile.FileCache.Count);
                 int index = 0;
                 foreach (var file in CompilerFile.FileCache)
                 {
@@ -99,7 +103,7 @@ namespace Oxide.CSharp
                     CompilerFile.FileCache.Remove(key);
                 }
 
-                ArrayPool.Free(toRemove);
+                ArrayPool<object>.Shared.Return(toRemove);
             }
         }
 
@@ -241,6 +245,9 @@ namespace Oxide.CSharp
                 return false;
             }
 
+            ProcessTransportProtocol protocol = new ProcessTransportProtocol(process);
+            compilerStream = new MessageBroker<CompilerMessage>(protocol, protocol, pool: ArrayPool<byte>.Shared);
+            compilerStream.OnMessageReceived += OnMessage;
             client = new ObjectStreamClient<CompilerMessage>(process.StandardOutput.BaseStream, process.StandardInput.BaseStream);
             client.Message += OnMessage;
             client.Error += OnError;
@@ -322,7 +329,7 @@ namespace Oxide.CSharp
             ExpireFileCache();
         }
 
-        private void OnMessage(ObjectStreamConnection<CompilerMessage, CompilerMessage> connection, CompilerMessage message)
+        private void OnMessage(CompilerMessage message)
         {
             if (message == null)
             {
@@ -430,7 +437,7 @@ namespace Oxide.CSharp
                                 break;
                     }
 
-                    connection.PushMessage(message);
+                    compilerStream.SendMessage(message);
 
                     if (!ready)
                     {
@@ -439,7 +446,7 @@ namespace Oxide.CSharp
                         {
                             CompilerMessage msg = messageQueue.Dequeue();
                             compilations[msg.Id].startedAt = Interface.Oxide.Now;
-                            connection.PushMessage(msg);
+                            compilerStream.SendMessage(msg);
                         }
                     }
                     break;
@@ -575,7 +582,7 @@ namespace Oxide.CSharp
             if (ready)
             {
                 compilation.startedAt = Interface.Oxide.Now;
-                client.PushMessage(message);
+                compilerStream.SendMessage(message);
             }
             else
             {
