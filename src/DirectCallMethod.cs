@@ -1,13 +1,11 @@
-﻿extern alias References;
-
+extern alias References;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Oxide.Core.Plugins;
 using References::Mono.Cecil;
 using References::Mono.Cecil.Cil;
 using References::Mono.Cecil.Rocks;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 
 namespace Oxide.Core.CSharp
 {
@@ -40,7 +38,7 @@ namespace Oxide.Core.CSharp
 
         private string hook_attribute = typeof(HookMethodAttribute).FullName;
 
-        public DirectCallMethod(ModuleDefinition module, TypeDefinition type, ReaderParameters readerParameters)
+        public DirectCallMethod(ModuleDefinition module, TypeDefinition type, AssemblyDefinition baseAssembly)
         {
             this.module = module;
             this.type = type;
@@ -51,22 +49,29 @@ namespace Oxide.Core.CSharp
             stringEquals = module.ImportReference(typeof(string).GetMethod("Equals", new[] { typeof(string) }));
 
             // Copy method definition from base class
-            AssemblyDefinition base_assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll"), readerParameters);
-            ModuleDefinition base_module = base_assembly.MainModule;
-            TypeDefinition base_type = module.ImportReference(base_assembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
+
+            ModuleDefinition base_module = baseAssembly.MainModule;
+            TypeDefinition base_type = module.ImportReference(baseAssembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
             MethodDefinition base_method = module.ImportReference(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
 
             // Create method override based on virtual method signature
-            method = new MethodDefinition(base_method.Name, base_method.Attributes, base_module.ImportReference(base_method.ReturnType)) { DeclaringType = type };
+            method = new MethodDefinition(base_method.Name, base_method.Attributes,
+                base_module.ImportReference(base_method.ReturnType))
+            {
+                DeclaringType = type
+            };
+
             foreach (ParameterDefinition parameter in base_method.Parameters)
             {
-                ParameterDefinition new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, module.ImportReference(parameter.ParameterType))
+                ParameterDefinition new_param = new(parameter.Name, parameter.Attributes,
+                    module.ImportReference(parameter.ParameterType))
                 {
                     IsOut = parameter.IsOut,
                     Constant = parameter.Constant,
                     MarshalInfo = parameter.MarshalInfo,
                     IsReturnValue = parameter.IsReturnValue
                 };
+
                 foreach (CustomAttribute attribute in parameter.CustomAttributes)
                 {
                     new_param.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
@@ -118,7 +123,8 @@ namespace Oxide.Core.CSharp
             AddInstruction(OpCodes.Stloc_1);
 
             // Find all hook methods defined by the plugin
-            foreach (MethodDefinition m in type.Methods.Where(m => !m.IsStatic && (m.IsPrivate || IsHookMethod(m)) && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && m.DeclaringType == type && !m.IsSetter && !m.IsGetter))
+            foreach (MethodDefinition m in type.Methods.Where(m => !m.IsStatic && (m.IsPrivate ||
+                         IsHookMethod(m)) && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && m.DeclaringType == type && !m.IsSetter && !m.IsGetter))
             {
                 //ignore compiler generated
                 if (m.Name.Contains("<"))
@@ -413,11 +419,11 @@ namespace Oxide.Core.CSharp
             return instruction;
         }
 
-        public VariableDefinition AddVariable(TypeReference typeRef)
+        public VariableDefinition AddVariable(TypeReference typeReference)
         {
-            VariableDefinition def = new VariableDefinition(typeRef);
-            body.Variables.Add(def);
-            return def;
+            VariableDefinition variableDefinition = new(typeReference);
+            body.Variables.Add(variableDefinition);
+            return variableDefinition;
         }
 
         private Instruction Ldc_I4_n(int n)

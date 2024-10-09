@@ -31,7 +31,9 @@ namespace Oxide.CSharp.Patching
 
                     if (!type.IsAbstract && PatchType.IsAssignableFrom(type))
                     {
-                        List<PatchValidationAttribute> validators = GetValidationRules(type.GetCustomAttributes(PatchValidationType, true).Concat(type.Assembly.GetCustomAttributes(PatchValidationType, true)).ToArray());
+                        List<PatchValidationAttribute> validators = GetValidationRules(type.GetCustomAttributes(PatchValidationType, true)
+                            .Concat(type.Assembly.GetCustomAttributes(PatchValidationType, true)).ToArray());
+
                         patchTypes.Add(type, validators);
                         Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher", $"Found {validators.Count} total validators for patch {type.Name}");
                     }
@@ -91,11 +93,13 @@ namespace Oxide.CSharp.Patching
                     IPatch patch = (IPatch)Activator.CreateInstance(patchType, true);
                     context.ContextPatches = 0;
                     patch.Patch(context);
-                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher", $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName}");
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher",
+                        $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName}");
                 }
                 catch (Exception e)
                 {
-                    Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Patch, "Patcher", $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName} but threw a error", e);
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Patch, "Patcher",
+                        $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName} but threw a error", e);
                 }
             }
 
