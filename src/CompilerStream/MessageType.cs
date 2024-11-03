@@ -3,6 +3,7 @@
 namespace Oxide.CSharp.CompilerStream
 {
     [Flags]
+    [Serializable]
     public enum MessageType : byte
     {
         Unknown = 0x00,
@@ -15,10 +16,12 @@ namespace Oxide.CSharp.CompilerStream
 
         Ready = 0x08,
 
-        Command = 0x16,
+        Command = 0x10,
 
-        Data = 0x32,
+        Data = 0x20,
 
-        Shutdown = 0x64
+        Error = 0x40,
+
+        Shutdown = 80
     }
 }

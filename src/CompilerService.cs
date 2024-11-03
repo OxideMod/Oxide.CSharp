@@ -23,6 +23,7 @@ using System.Threading;
 using Oxide.Core.Extensions;
 using Oxide.IO;
 using Oxide.IO.TransportMethods;
+using Oxide.CSharp.CompilerStream;
 
 namespace Oxide.CSharp
 {
@@ -31,13 +32,12 @@ namespace Oxide.CSharp
         private static readonly Regex SymbolEscapeRegex = new Regex(@"[^\w\d]", RegexOptions.Compiled);
         private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
         private Hash<int, Compilation> compilations;
-        private Queue<CompilerMessage> messageQueue;
         private Process process;
         private volatile int lastId;
         private volatile bool ready;
         private Core.Libraries.Timer.TimerInstance idleTimer;
         // private ObjectStreamClient<CompilerMessage> client;
-        private MessageBroker<CompilerMessage> compilerStream;
+        private CompilerClient client;
         private string filePath;
         private string remoteName;
         private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
@@ -49,7 +49,6 @@ namespace Oxide.CSharp
         public CompilerService(Extension extension)
         {
             compilations = new Hash<int, Compilation>();
-            messageQueue = new Queue<CompilerMessage>();
             string arc = IntPtr.Size == 8 ? "x64" : "x86";
             filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Oxide.Compiler");
             string downloadUrl = string.Format(baseUrl, extension.Branch);
@@ -277,13 +276,7 @@ namespace Oxide.CSharp
                 return false;
             }
 
-            ProcessTransportProtocol protocol = new ProcessTransportProtocol(process);
-            compilerStream = new MessageBroker<CompilerMessage>(protocol, protocol, pool: ArrayPool<byte>.Shared);
-            compilerStream.OnMessageReceived += OnMessage;
-            client = new ObjectStreamClient<CompilerMessage>(process.StandardOutput.BaseStream, process.StandardInput.BaseStream);
-            client.Message += OnMessage;
-            client.Error += OnError;
-            client.Start();
+            client = new CompilerClient(process);
             ResetIdleTimer();
             Interface.Oxide.LogInfo($"[CSharp] Started Oxide.Compiler v{GetCompilerVersion()} successfully");
             return true;

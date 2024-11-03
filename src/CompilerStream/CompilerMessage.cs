@@ -1,12 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace Oxide.CSharp.CompilerStream
 {
+    [Serializable]
     public sealed class CompilerMessage
     {
+        public int Id { get; set; }
+
         public MessageType Type { get; set; }
 
         public byte[] Data { get; set; }
