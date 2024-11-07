@@ -9,7 +9,7 @@ namespace Oxide.Plugins
     /// <summary>
     /// Indicates that the specified method should be a handler for a covalence command
     /// </summary>
-    [AttributeUsage(AttributeTargets.Method)]
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public class CommandAttribute : Attribute
     {
         public string[] Commands { get; }
@@ -80,25 +80,21 @@ namespace Oxide.Plugins
         {
             foreach (MethodInfo method in GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                object[] commandAttribute = method.GetCustomAttributes(typeof(CommandAttribute), true);
-                object[] permissionAttribute = method.GetCustomAttributes(typeof(PermissionAttribute), true);
-                if (commandAttribute.Length <= 0)
-                {
-                    continue;
-                }
+                object[] permissions = method.GetCustomAttributes(typeof(PermissionAttribute), true);
+                PermissionAttribute perm = permissions.Length <= 0 ? null : permissions[0] as PermissionAttribute;
 
-                CommandAttribute cmd = commandAttribute[0] as CommandAttribute;
-                PermissionAttribute perm = permissionAttribute.Length <= 0 ? null : permissionAttribute[0] as PermissionAttribute;
-                if (cmd == null)
+                object[] commands = method.GetCustomAttributes(typeof(CommandAttribute), true);
+                foreach (object attribute in commands)
                 {
-                    continue;
-                }
+                    if (!(attribute is CommandAttribute cmd))
+                        continue;
 
-                AddCovalenceCommand(cmd.Commands, perm?.Permission, (caller, command, args) =>
-                {
-                    CallHook(method.Name, caller, command, args);
-                    return true;
-                });
+                    AddCovalenceCommand(cmd.Commands, perm?.Permission, (caller, command, args) =>
+                    {
+                        CallHook(method.Name, caller, command, args);
+                        return true;
+                    });
+                }
             }
 
             base.HandleAddedToManager(manager);
