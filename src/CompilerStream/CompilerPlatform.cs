@@ -1,6 +1,6 @@
 using System;
 
-namespace ObjectStream.Data
+namespace Oxide.CSharp.CompilerStream
 {
     [Serializable]
     public enum CompilerPlatform

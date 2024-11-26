@@ -1,5 +1,4 @@
-﻿using Oxide.Core;
-using Oxide.Core.Logging;
+﻿using Oxide.Core.Logging;
 using Oxide.Logging;
 using System;
 

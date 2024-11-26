@@ -62,9 +62,9 @@ namespace Oxide.Plugins
             {
                 if (rawAssembly == null)
                 {
-                    foreach (Action<bool> cb in loadCallbacks)
+                    foreach (Action<bool> loadingCallbacks in loadCallbacks)
                     {
-                        cb(true);
+                        loadingCallbacks(true);
                     }
 
                     loadCallbacks.Clear();
@@ -72,12 +72,12 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                LoadedAssembly = Assembly.Load(rawAssembly);
+                LoadedAssembly = Assembly.Load(rawAssembly, Symbols);
                 isLoaded = true;
 
-                foreach (Action<bool> cb in loadCallbacks)
+                foreach (Action<bool> loadingCallbacks in loadCallbacks)
                 {
-                    cb(true);
+                    loadingCallbacks(true);
                 }
 
                 loadCallbacks.Clear();
@@ -90,7 +90,8 @@ namespace Oxide.Plugins
         {
             if (isPatching)
             {
-                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp", $"Already patching plugin assembly: {PluginNames.ToSentence()} (ignoring)");
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp",
+                    $"Already patching plugin assembly: {PluginNames.ToSentence()} (ignoring)");
                 return;
             }
 
@@ -99,45 +100,53 @@ namespace Oxide.Plugins
             {
                 try
                 {
-                    AssemblyDefinition definition = null;
-                    ReaderParameters readerParameters = new ReaderParameters() { AssemblyResolver = new AssemblyResolver() };
-                    using (MemoryStream stream = new MemoryStream(RawAssembly))
+                    AssemblyDefinition assemblyDefinition;
+                    ReaderParameters readerParameters = new ReaderParameters
                     {
-                        definition = AssemblyDefinition.ReadAssembly(stream, readerParameters);
+                        AssemblyResolver = new AssemblyResolver()
+                    };
+
+                    using (MemoryStream memoryStream = new MemoryStream(RawAssembly))
+                    {
+                        assemblyDefinition = AssemblyDefinition.ReadAssembly(memoryStream, readerParameters);
                     }
 
                     int foundPlugins = 0;
                     int totalPlugins = CompilablePlugins.Count(p => p.CompilerErrors == null);
-                    for (int i = 0; i < definition.MainModule.Types.Count; i++)
+                    for (int i = 0; i < assemblyDefinition.MainModule.Types.Count; i++)
                     {
                         if (foundPlugins == totalPlugins)
                         {
-                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Patched {foundPlugins} of {totalPlugins} plugins");
+                            Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp",
+                                $"Patched {foundPlugins} of {totalPlugins} plugins");
                             break;
                         }
                         try
                         {
-                            TypeDefinition type = definition.MainModule.Types[i];
+                            TypeDefinition typeDefinition = assemblyDefinition.MainModule.Types[i];
 
-                            if (type.Namespace != "Oxide.Plugins")
+                            if (typeDefinition.Namespace != "Oxide.Plugins")
                             {
                                 continue;
                             }
 
-                            if (PluginNames.Contains(type.Name))
+                            if (PluginNames.Contains(typeDefinition.Name))
                             {
                                 foundPlugins++;
 
-                                Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Preparing {type.Name} for runtime patching. . .");
+                                Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp",
+                                    $"Preparing {typeDefinition.Name} for runtime patching. . .");
 
                                 MethodDefinition constructor =
-                                    type.Methods.FirstOrDefault(
+                                    typeDefinition.Methods.FirstOrDefault(
                                         m => !m.IsStatic && m.IsConstructor && !m.HasParameters && !m.IsPublic);
 
                                 if (constructor != null)
                                 {
-                                    Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp", $"User defined constructors are not supported. Please remove the constructor from {type.Name}.cs"); // Should be allowed
-                                    CompilablePlugin plugin = CompilablePlugins.SingleOrDefault(p => p.Name == type.Name);
+                                    Interface.Oxide.RootLogger.WriteDebug(LogType.Error, LogEvent.Compile, "CSharp",
+                                        $"User defined constructors are not supported. Please remove the constructor from {typeDefinition.Name}.cs"); // Should be allowed
+
+                                    CompilablePlugin plugin = CompilablePlugins.SingleOrDefault(p => p.Name == typeDefinition.Name);
                                     if (plugin != null)
                                     {
                                         plugin.CompilerErrors = "Primary constructor in main class must be public";
@@ -145,8 +154,8 @@ namespace Oxide.Plugins
                                 }
                                 else
                                 {
-                                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Patching DirectCallMethod on {type.Name}");
-                                    new DirectCallMethod(definition.MainModule, type, readerParameters);
+                                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"Patching DirectCallMethod on {typeDefinition.Name}");
+                                    new DirectCallMethod(assemblyDefinition.MainModule, typeDefinition, readerParameters);
                                 }
                             }
                         }
@@ -156,10 +165,14 @@ namespace Oxide.Plugins
                         }
                     }
 
-                    using (MemoryStream stream = new MemoryStream())
+                    using (MemoryStream memoryStream = new MemoryStream())
                     {
-                        definition.Write(stream, new WriterParameters() { WriteSymbols = false }) ;
-                        PatchedAssembly = stream.ToArray();
+                        assemblyDefinition.Write(memoryStream, new WriterParameters
+                        {
+                            WriteSymbols = false
+                        });
+
+                        PatchedAssembly = memoryStream.ToArray();
                     }
 
                     Interface.Oxide.NextTick(() =>
@@ -173,7 +186,8 @@ namespace Oxide.Plugins
                     Interface.Oxide.NextTick(() =>
                     {
                         isPatching = false;
-                        Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp", $"Failed to patch DirectCallHook method on plugins {PluginNames.ToSentence()}, performance may be degraded.", ex);
+                        Interface.Oxide.RootLogger.WriteDebug(LogType.Warning, LogEvent.Compile, "CSharp",
+                            $"Failed to patch DirectCallHook method on plugins {PluginNames.ToSentence()}, performance may be degraded.", ex);
                         callback(RawAssembly);
                     });
                 }

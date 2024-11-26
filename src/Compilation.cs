@@ -1,4 +1,3 @@
-using ObjectStream.Data;
 using Oxide.Core;
 using Oxide.Core.Logging;
 using Oxide.Logging;
@@ -9,6 +8,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Oxide.CSharp.Common;
+using Oxide.CSharp.CompilerStream;
 
 namespace Oxide.Plugins
 {
@@ -35,7 +36,7 @@ namespace Oxide.Plugins
         {
             this.id = id;
             this.callback = callback;
-            this.queuedPlugins = new ConcurrentHashSet<CompilablePlugin>(plugins);
+            queuedPlugins = new ConcurrentHashSet<CompilablePlugin>(plugins);
 
             if (Current == null)
             {
@@ -115,18 +116,20 @@ namespace Oxide.Plugins
                     foreach (string filename in CSharpPluginLoader.PluginReferences)
                     {
                         bool added = true;
+                        string fileNameExe = $"{filename}.exe";
+                        string fileNameDll = $"{filename}.dll";
                         //Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Compile, "CSharp", $"Adding default reference: {filename}");
-                        if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".dll")))
+                        if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, fileNameDll)))
                         {
-                            references[filename + ".dll"] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename + ".dll");
+                            references[fileNameDll] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, fileNameDll);
                         }
-                        else if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, filename + ".exe")))
+                        else if (File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, fileNameExe)))
                         {
-                            references[filename + ".exe"] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename + ".exe");
+                            references[fileNameExe] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, fileNameExe);
                         }
-                        else if (File.Exists(Path.Combine(Interface.Oxide.RootDirectory, filename + ".exe")))
+                        else if (File.Exists(Path.Combine(Interface.Oxide.RootDirectory, fileNameExe)))
                         {
-                            references[filename + ".exe"] = CompilerFile.CachedReadFile(Interface.Oxide.RootDirectory, filename + ".exe");
+                            references[fileNameExe] = CompilerFile.CachedReadFile(Interface.Oxide.RootDirectory, fileNameExe);
                         }
                         else
                         {
@@ -232,21 +235,21 @@ namespace Oxide.Plugins
                 if (parsingNamespace)
                 {
                     // Skip blank lines and opening brace at the top of the namespace block
-                    match = Regex.Match(line, @"^\s*\{?\s*$", RegexOptions.IgnoreCase);
+                    match = Constants.BlankLineRegex.Match(line);
                     if (match.Success)
                     {
                         continue;
                     }
 
                     // Skip class custom attributes
-                    match = Regex.Match(line, @"^\s*\[", RegexOptions.IgnoreCase);
+                    match = Constants.CustomAttributeRegex.Match(line);
                     if (match.Success)
                     {
                         continue;
                     }
 
                     // Detect main plugin class name
-                    match = Regex.Match(line, @"^\s*(?:public|private|protected|internal)?\s*class\s+(\S+)\s+\:\s+\S+Plugin\s*$", RegexOptions.IgnoreCase);
+                    match = Constants.MainPluginClassNameRegex.Match(line);
                     if (!match.Success)
                     {
                         break;
@@ -264,7 +267,7 @@ namespace Oxide.Plugins
                 }
 
                 // Include explicit plugin dependencies defined by magic comments in script
-                match = Regex.Match(line, @"^//\s*Requires:\s*(\S+?)(\.cs)?\s*$", RegexOptions.IgnoreCase);
+                match = Constants.RequiresTextRegex.Match(line);
                 if (match.Success)
                 {
                     string dependencyName = match.Groups[1].Value;
@@ -284,7 +287,7 @@ namespace Oxide.Plugins
                 }
 
                 // Include explicit references defined by magic comments in script
-                match = Regex.Match(line, @"^//\s*Reference:\s*(\S+)\s*$", RegexOptions.IgnoreCase);
+                match = Constants.ReferenceTextRegex.Match(line);
                 if (match.Success)
                 {
                     string result = match.Groups[1].Value;
@@ -302,12 +305,12 @@ namespace Oxide.Plugins
                 }
 
                 // Include implicit references detected from using statements in script
-                match = Regex.Match(line, @"^\s*using\s+(Oxide\.(?:Core|Ext|Game)\.(?:[^\.]+))[^;]*;.*$", RegexOptions.IgnoreCase);
+                match = Constants.ImplicitReferenceTextRegex.Match(line);
                 if (match.Success)
                 {
                     string result = match.Groups[1].Value;
-                    string newResult = Regex.Replace(result, @"Oxide\.[\w]+\.([\w]+)", "Oxide.$1");
-                    if (!string.IsNullOrEmpty(newResult) && File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, newResult + ".dll")))
+                    string newResult = Constants.PluginNameRegex.Replace(result, "Oxide.$1");
+                    if (!string.IsNullOrEmpty(newResult) && File.Exists(Path.Combine(Interface.Oxide.ExtensionDirectory, $"{newResult}.dll")))
                     {
                         AddReference(plugin, newResult);
                     }
@@ -320,7 +323,7 @@ namespace Oxide.Plugins
                 }
 
                 // Start parsing the Oxide.Plugins namespace contents
-                match = Regex.Match(line, @"^\s*namespace Oxide\.Plugins\s*(\{\s*)?$", RegexOptions.IgnoreCase);
+                match = Constants.NamespaceRegex.Match(line);
                 if (match.Success)
                 {
                     parsingNamespace = true;
@@ -332,7 +335,7 @@ namespace Oxide.Plugins
         {
             foreach (string reference in plugin.References)
             {
-                Match match = Regex.Match(reference, @"^(Oxide\.(?:Ext|Game)\.(.+))$", RegexOptions.IgnoreCase);
+                Match match = Constants.PluginReferenceRegex.Match(reference);
                 if (!match.Success)
                 {
                     continue;
@@ -386,19 +389,19 @@ namespace Oxide.Plugins
             }
         }
 
-        private void AddReference(CompilablePlugin plugin, string assemblyName)
+        private void AddReference(CompilablePlugin plugin, string assemblyNameString)
         {
-            string path = Path.Combine(Interface.Oxide.ExtensionDirectory, assemblyName + ".dll");
+            string path = Path.Combine(Interface.Oxide.ExtensionDirectory, $"{assemblyNameString}.dll");
             if (!File.Exists(path))
             {
-                if (assemblyName.StartsWith("Oxide."))
+                if (assemblyNameString.StartsWith("Oxide."))
                 {
-                    plugin.References.Add(assemblyName);
+                    plugin.References.Add(assemblyNameString);
                     return;
                 }
 
-                Interface.Oxide.LogError($"Assembly referenced by {plugin.Name} plugin does not exist: {assemblyName}.dll");
-                plugin.CompilerErrors = $"Referenced assembly does not exist: {assemblyName}";
+                Interface.Oxide.LogError($"Assembly referenced by {plugin.Name} plugin does not exist: {assemblyNameString}.dll");
+                plugin.CompilerErrors = $"Referenced assembly does not exist: {assemblyNameString}";
                 RemovePlugin(plugin);
                 return;
             }
@@ -406,17 +409,18 @@ namespace Oxide.Plugins
             Assembly assembly;
             try
             {
-                assembly = Assembly.Load(assemblyName);
+                assembly = Assembly.Load(assemblyNameString);
             }
             catch (FileNotFoundException)
             {
-                Interface.Oxide.LogError($"Assembly referenced by {plugin.Name} plugin is invalid: {assemblyName}.dll");
-                plugin.CompilerErrors = $"Referenced assembly is invalid: {assemblyName}";
+                Interface.Oxide.LogError($"Assembly referenced by {plugin.Name} plugin is invalid: {assemblyNameString}.dll");
+                plugin.CompilerErrors = $"Referenced assembly is invalid: {assemblyNameString}";
                 RemovePlugin(plugin);
                 return;
             }
 
-            AddReference(plugin, assembly.GetName());
+            AssemblyName assemblyName = assembly.GetName();
+            AddReference(plugin, assemblyName, $"{assemblyName.Name}.dll");
 
             // Include references made by the referenced assembly
             foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
@@ -427,30 +431,29 @@ namespace Oxide.Plugins
                     continue;
                 }
 
-                string referencePath = Path.Combine(Interface.Oxide.ExtensionDirectory, reference.Name + ".dll");
+                string referenceString = $"{reference.Name}.dll";
+                string referencePath = Path.Combine(Interface.Oxide.ExtensionDirectory, referenceString);
                 if (!File.Exists(referencePath))
                 {
                     Interface.Oxide.LogWarning($"Reference {reference.Name}.dll from {assembly.GetName().Name}.dll not found");
                     continue;
                 }
 
-                AddReference(plugin, reference);
+                AddReference(plugin, reference, referenceString);
             }
         }
 
-        private void AddReference(CompilablePlugin plugin, AssemblyName reference)
+        private void AddReference(CompilablePlugin plugin, AssemblyName reference, string referenceString)
         {
-            string filename = reference.Name + ".dll";
-            if (!references.ContainsKey(filename))
+            if (!references.ContainsKey(referenceString))
             {
-                Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp", $"{reference.Name} has been added as a reference");
-                references[filename] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, filename);
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp",
+                    $"{reference.Name} has been added as a reference");
+
+                references[referenceString] = CompilerFile.CachedReadFile(Interface.Oxide.ExtensionDirectory, referenceString);
             }
 
-            if (!plugin.References.Contains(reference.Name))
-            {
-                plugin.References.Add(reference.Name);
-            }
+            plugin.References.Add(reference.Name);
         }
 
         private bool CacheScriptLines(CompilablePlugin plugin)
@@ -482,12 +485,14 @@ namespace Oxide.Plugins
                             plugin.ScriptLines = lines.ToArray();
                             plugin.ScriptEncoding = reader.CurrentEncoding;
                         }
+
                         plugin.LastCachedScriptAt = plugin.LastModifiedAt;
                         if (plugins.Remove(plugin))
                         {
                             queuedPlugins.Add(plugin);
                         }
                     }
+
                     return true;
                 }
                 catch (IOException)
@@ -497,6 +502,7 @@ namespace Oxide.Plugins
                         waitingForAccess = true;
                         Interface.Oxide.LogWarning("Waiting for another application to stop using script: {0}", plugin.Name);
                     }
+
                     Thread.Sleep(50);
                 }
             }
@@ -504,7 +510,10 @@ namespace Oxide.Plugins
 
         private void CacheModifiedScripts()
         {
-            CompilablePlugin[] modifiedPlugins = plugins.Where(pl => pl.ScriptLines == null || pl.HasBeenModified() || pl.LastCachedScriptAt != pl.LastModifiedAt).ToArray();
+            CompilablePlugin[] modifiedPlugins =
+                plugins.Where(plugin => plugin.ScriptLines == null || plugin.HasBeenModified() ||
+                                    plugin.LastCachedScriptAt != plugin.LastModifiedAt).ToArray();
+
             if (modifiedPlugins.Length < 1)
             {
                 return;
@@ -521,7 +530,7 @@ namespace Oxide.Plugins
 
         private void RemovePlugin(CompilablePlugin plugin)
         {
-            if (plugin.LastCompiledAt == default(DateTime))
+            if (plugin.LastCompiledAt == default)
             {
                 return;
             }

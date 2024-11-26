@@ -1,7 +1,5 @@
 extern alias References;
 
-using ObjectStream;
-using ObjectStream.Data;
 using Oxide.Core;
 using Oxide.Core.Logging;
 using Oxide.Logging;
@@ -21,53 +19,57 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Oxide.Core.Extensions;
-using Oxide.IO;
-using Oxide.IO.TransportMethods;
+using Oxide.CSharp.Common;
 using Oxide.CSharp.CompilerStream;
+using CompilerMessage = Oxide.CSharp.CompilerStream.CompilerMessage;
 
 namespace Oxide.CSharp
 {
     internal class CompilerService
     {
-        private static readonly Regex SymbolEscapeRegex = new Regex(@"[^\w\d]", RegexOptions.Compiled);
-        private const string baseUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
-        private Hash<int, Compilation> compilations;
-        private Process process;
-        private volatile int lastId;
-        private volatile bool ready;
-        private Core.Libraries.Timer.TimerInstance idleTimer;
-        // private ObjectStreamClient<CompilerMessage> client;
-        private CompilerClient client;
-        private string filePath;
-        private string remoteName;
-        private string compilerBasicArguments = "-unsafe true --setting:Force true -ms true";
-        private static Regex fileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$", RegexOptions.Compiled);
-        public bool Installed => File.Exists(filePath);
-        private float startTime;
-        private string[] preprocessor = null;
+        private readonly Hash<int, Compilation> _compilations;
+        private readonly Queue<CompilerMessage> _messageQueue = new Queue<CompilerMessage>();
+        private Process? _compilerProcess;
+        private volatile int _lastId;
+        private volatile bool _ready;
+        private Core.Libraries.Timer.TimerInstance _idleTimer;
+        private MessageBrokerService? _messageBrokerService;
+        private readonly string _filePath;
+        private string _remoteName;
+        private float _startTime;
+        private string[] _preprocessor;
+        private readonly string _pipeName;
+
+        public bool Installed => File.Exists(_filePath);
 
         public CompilerService(Extension extension)
         {
-            compilations = new Hash<int, Compilation>();
-            string arc = IntPtr.Size == 8 ? "x64" : "x86";
-            filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Oxide.Compiler");
-            string downloadUrl = string.Format(baseUrl, extension.Branch);
+            _compilations = new Hash<int, Compilation>();
+            _filePath = Path.Combine(Interface.Oxide.RootDirectory, $"Oxide.Compiler");
+            _pipeName = $"Oxide.Compiler.{Guid.NewGuid()}";
+
+            string downloadUrl = string.Format(Constants.CompilerDownloadUrl, extension.Branch);
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
                 case PlatformID.Win32S:
                 case PlatformID.Win32Windows:
-                    filePath += ".exe";
-                    remoteName = downloadUrl + $"win-{arc}.Compiler.exe";
+                {
+                    _filePath += ".exe";
+                    string arc = IntPtr.Size == 8 ? "x64" : "x86";
+                    _remoteName = downloadUrl + $"win-{arc}.Compiler.exe";
                     break;
-
+                }
                 case PlatformID.MacOSX:
-                    remoteName = downloadUrl + "osx-x64.Compiler";
+                {
+                    _remoteName = downloadUrl + "osx-x64.Compiler";
                     break;
-
+                }
                 case PlatformID.Unix:
-                    remoteName = downloadUrl + "linux-x64.Compiler";
+                {
+                    _remoteName = downloadUrl + "linux-x64.Compiler";
                     break;
+                }
             }
 
             EnvironmentHelper.SetVariable("Path:Root", Interface.Oxide.RootDirectory);
@@ -89,7 +91,7 @@ namespace Oxide.CSharp
             {
                 object[] toRemove = ArrayPool<object>.Shared.Take(CompilerFile.FileCache.Count);
                 int index = 0;
-                foreach (var file in CompilerFile.FileCache)
+                foreach (KeyValuePair<string, CompilerFile> file in CompilerFile.FileCache)
                 {
                     if (file.Value.KeepCached)
                     {
@@ -113,7 +115,7 @@ namespace Oxide.CSharp
 
         internal bool Precheck()
         {
-            List<string> preprocessorList = new List<string>()
+            List<string> preprocessorList = new List<string>
             {
                 "OXIDE",
                 "OXIDEMOD"
@@ -171,29 +173,29 @@ namespace Oxide.CSharp
                 preprocessorList.Add("OXIDE_PUBLICIZED");
             }
 
-            preprocessor = preprocessorList.Distinct().ToArray();
+            _preprocessor = preprocessorList.Distinct().ToArray();
 
 #if DEBUG
             Log(LogType.Debug, $"Preprocessors are: {string.Join(", ", preprocessor)}");
 #endif
 
 
-            if (!DownloadFile(remoteName, filePath, 3))
+            /*if (!DownloadFile(remoteName, filePath, 3))
             {
                 return false;
-            }
+            }*/
 
-            return SetFilePermissions(filePath);
+            return SetFilePermissions(_filePath);
         }
 
         private bool Start()
         {
-            if (filePath == null)
+            if (_filePath == null)
             {
                 return false;
             }
 
-            if (process != null && process.Handle != IntPtr.Zero && !process.HasExited)
+            if (_compilerProcess != null && _compilerProcess.Handle != IntPtr.Zero && !_compilerProcess.HasExited)
             {
                 return true;
             }
@@ -201,7 +203,7 @@ namespace Oxide.CSharp
             try
             {
                 int attempts = 0;
-                while (!File.Exists(filePath))
+                while (!File.Exists(_filePath))
                 {
                     attempts++;
                     if (attempts > 3)
@@ -209,7 +211,7 @@ namespace Oxide.CSharp
                         throw new IOException($"Compiler failed to download after 3 attempts");
                     }
 
-                    Log(LogType.Error, $"Compiler doesn't exist at {filePath}, attempting to download again | Attempt: {attempts} of 3");
+                    Log(LogType.Error, $"Compiler doesn't exist at {_filePath}, attempting to download again | Attempt: {attempts} of 3");
                     Precheck();
                     Thread.Sleep(100);
                 }
@@ -221,36 +223,36 @@ namespace Oxide.CSharp
             }
 
             Stop(false, "starting new process");
-            startTime = Interface.Oxide.Now;
-            string args = compilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} -l:file \"{Path.Combine(Interface.Oxide.LogDirectory, $"oxide.compiler_{DateTime.Now:yyyy-MM-dd}.log")}\"";
+            _startTime = Interface.Oxide.Now;
+            string args = Constants.CompilerBasicArguments + $" --parent {Process.GetCurrentProcess().Id} --pipe {_pipeName} -l:file \"{Path.Combine(Interface.Oxide.LogDirectory, $"oxide.compiler_{DateTime.Now:yyyy-MM-dd}.log")}\"";
 #if DEBUG
             args += " -v debug";
 #endif
             Log(LogType.Info, $"Starting compiler with parameters: {args}");
             try
             {
-                process = new Process
+                _compilerProcess = new Process
                 {
                     StartInfo =
                     {
-                        FileName = filePath,
+                        FileName = _filePath,
                         CreateNoWindow = true,
                         UseShellExecute = false,
-                        RedirectStandardInput = true,
-                        RedirectStandardOutput = true,
                         Arguments = args
                     },
+
                     EnableRaisingEvents = true
                 };
-                process.Exited += OnProcessExited;
-                process.Start();
+
+                _compilerProcess.Exited += OnCompilerProcessExited;
+                _compilerProcess.Start();
             }
             catch (Exception ex)
             {
-                process?.Dispose();
-                process = null;
+                _compilerProcess?.Dispose();
+                _compilerProcess = null;
                 Interface.Oxide.LogException($"Exception while starting compiler", ex);
-                if (filePath.Contains("'"))
+                if (_filePath.Contains("'"))
                 {
                     Interface.Oxide.LogError("Server directory path contains an apostrophe, compiler will not work until path is renamed");
                 }
@@ -271,90 +273,20 @@ namespace Oxide.CSharp
                 }
             }
 
-            if (process == null)
+            if (_compilerProcess == null)
             {
                 return false;
             }
 
-            client = new CompilerClient(process);
+            _messageBrokerService = new MessageBrokerService();
+            _messageBrokerService.OnMessageReceived += OnMessageReceived;
+            _messageBrokerService.Start(_pipeName);
             ResetIdleTimer();
             Interface.Oxide.LogInfo($"[CSharp] Started Oxide.Compiler v{GetCompilerVersion()} successfully");
             return true;
         }
 
-        internal void Stop(bool synchronous, string reason)
-        {
-            ready = false;
-            Process endedProcess = process;
-            ObjectStreamClient<CompilerMessage> stream = client;
-            if (endedProcess == null || stream == null)
-            {
-                return;
-            }
-
-            process = null;
-            client = null;
-            endedProcess.Exited -= OnProcessExited;
-            endedProcess.Refresh();
-            stream.Message -= OnMessage;
-            stream.Error -= OnError;
-
-            if (!string.IsNullOrEmpty(reason))
-            {
-                Interface.Oxide.LogInfo($"Shutting down compiler because {reason}");
-            }
-
-            if (!endedProcess.HasExited)
-            {
-                stream.PushMessage(new CompilerMessage { Type = CompilerMessageType.Exit });
-                if (synchronous)
-                {
-                    if (endedProcess.WaitForExit(10000))
-                    {
-                        Interface.Oxide.LogInfo("Compiler shutdown completed");
-                    }
-                    else
-                    {
-                        Interface.Oxide.LogWarning("Compiler failed to gracefully shutdown, killing the process...");
-                        endedProcess.Kill();
-                    }
-
-                    stream.Stop();
-                    stream = null;
-                    endedProcess.Close();
-                }
-                else
-                {
-                    ThreadPool.QueueUserWorkItem(_ =>
-                    {
-                        if (endedProcess.WaitForExit(10000))
-                        {
-                            Interface.Oxide.LogInfo("Compiler shutdown completed");
-                        }
-                        else
-                        {
-                            Interface.Oxide.LogWarning("Compiler failed to gracefully shutdown, killing the process...");
-                            endedProcess.Kill();
-                        }
-
-                        stream.Stop();
-                        stream = null;
-                        endedProcess.Close();
-                    });
-                }
-            }
-            else
-            {
-                stream.Stop();
-                stream = null;
-                endedProcess.Close();
-                Log(LogType.Info, "Released compiler resources");
-            }
-
-            ExpireFileCache();
-        }
-
-        private void OnMessage(CompilerMessage message)
+        private void OnMessageReceived(CompilerMessage message)
         {
             if (message == null)
             {
@@ -362,22 +294,27 @@ namespace Oxide.CSharp
                 return;
             }
 
+            Interface.Oxide.LogInfo($"Received message from compiler of type {message.Type}");
+
             switch (message.Type)
             {
-                case CompilerMessageType.Assembly:
-                    Compilation compilation = compilations[message.Id];
+                case MessageType.Data:
+                {
+                    Compilation compilation = _compilations[message.Id];
                     if (compilation == null)
                     {
                         Log(LogType.Error, "Compiler compiled an unknown assembly"); // TODO: Any way to clarify this?
                         return;
                     }
+
                     compilation.endedAt = Interface.Oxide.Now;
                     string stdOutput = (string)message.ExtraData;
                     if (stdOutput != null)
                     {
-                        foreach (string line in stdOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                        foreach (string line in stdOutput.Split(new[] { '\r', '\n' },
+                                     StringSplitOptions.RemoveEmptyEntries))
                         {
-                            Match match = fileErrorRegex.Match(line.Trim());
+                            Match match = Constants.FileErrorRegex.Match(line.Trim());
                             if (!match.Success)
                             {
                                 continue;
@@ -392,7 +329,8 @@ namespace Oxide.CSharp
                             string scriptName = Path.GetFileNameWithoutExtension(fileName);
                             string error = match.Groups["Message"].Value;
 
-                            CompilablePlugin compilablePlugin = compilation.plugins.SingleOrDefault(pl => pl.ScriptName == scriptName);
+                            CompilablePlugin compilablePlugin =
+                                compilation.plugins.SingleOrDefault(pl => pl.ScriptName == scriptName);
 
                             if (compilablePlugin == null)
                             {
@@ -400,92 +338,172 @@ namespace Oxide.CSharp
                                 continue;
                             }
 
-                            IEnumerable<string> missingRequirements = compilablePlugin.Requires.Where(name => !compilation.IncludesRequiredPlugin(name));
+                            IEnumerable<string> missingRequirements =
+                                compilablePlugin.Requires.Where(name => !compilation.IncludesRequiredPlugin(name));
 
-                            if (missingRequirements.Any())
+                            string[] missingRequirementsArray = missingRequirements.ToArray();
+                            if (missingRequirementsArray.Length > 0)
                             {
-                                compilablePlugin.CompilerErrors = $"Missing dependencies: {string.Join("," , missingRequirements.ToArray())}";
-                                Log(LogType.Error, $"[{match.Groups["Severity"].Value}][{scriptName}] Missing dependencies: {string.Join(",", missingRequirements.ToArray())}");
+                                compilablePlugin.CompilerErrors = $"Missing dependencies: {string.Join(",", missingRequirementsArray)}";
+
+                                Log(LogType.Error, $"[{match.Groups["Severity"].Value}][{scriptName}] Missing dependencies: {string.Join(",", missingRequirementsArray)}");
                             }
                             else
                             {
-                                compilablePlugin.CompilerErrors = error.Trim().Replace(Interface.Oxide.PluginDirectory + Path.DirectorySeparatorChar, string.Empty);
+                                compilablePlugin.CompilerErrors = error.Trim()
+                                    .Replace(Interface.Oxide.PluginDirectory + Path.DirectorySeparatorChar,
+                                        string.Empty);
                             }
                         }
                     }
-                    CompilationResult result = (CompilationResult)message.Data;
-                    if (result.Data == null || result.Data.Length == 0)
+
+                    CompilationResult compilationResult = Constants.Serializer.Deserialize<CompilationResult>(message.Data);
+                    if (compilationResult.Data == null || compilationResult.Data.Length == 0)
                     {
                         compilation.Completed();
                     }
                     else
                     {
-                        compilation.Completed(result.Data, result.Symbols);
+                        compilation.Completed(compilationResult.Data, compilationResult.Symbols);
                     }
-                    compilations.Remove(message.Id);
+
+                    _compilations.Remove(message.Id);
 
                     break;
+                }
+                case MessageType.Error:
+                {
+                    Exception exception = (Exception)message.ExtraData;
+                    Compilation compilation = _compilations[message.Id];
+                    _compilations.Remove(message.Id);
 
-                case CompilerMessageType.Error:
-                    Exception e = (Exception)message.Data;
-                    Compilation comp = compilations[message.Id];
-                    compilations.Remove(message.Id);
-
-                    if (comp == null)
+                    if (compilation == null)
                     {
-                        Interface.Oxide.LogException("Compiler returned a error for a untracked compilation", e);
+                        Interface.Oxide.LogException("Compiler returned a error for a untracked compilation", exception);
                         return;
                     }
 
-                    foreach (var p in comp.plugins)
+                    foreach (CompilablePlugin p in compilation.plugins)
                     {
-                        p.CompilerErrors = e.Message;
+                        p.CompilerErrors = exception.Message;
                     }
 
-                    comp.Completed();
+                    compilation.Completed();
                     break;
-
-                case CompilerMessageType.Ready:
-                    string logMessage = $"Ready signal received from compiler (Startup took: {Math.Round((Interface.Oxide.Now - startTime) * 1000f)}ms)";
-                    switch (messageQueue.Count)
+                }
+                case MessageType.Ready:
+                {
+                    string logMessage =
+                        $"Ready signal received from compiler (Startup took: {Math.Round((Interface.Oxide.Now - _startTime) * 1000f)}ms)";
+                    switch (_messageQueue.Count)
                     {
-                            case 0:
-                                Log(LogType.Info, logMessage);
-                                break;
-
-                            case 1:
-                                Log(LogType.Info, logMessage + ", sending compilation. . .");
-                                break;
-
-                            default:
-                                Log(LogType.Info, logMessage + $", sending {messageQueue.Count} compilations. . .");
-                                break;
-                    }
-
-                    compilerStream.SendMessage(message);
-
-                    if (!ready)
-                    {
-                        ready = true;
-                        while (messageQueue.Count > 0)
+                        case 0:
                         {
-                            CompilerMessage msg = messageQueue.Dequeue();
-                            compilations[msg.Id].startedAt = Interface.Oxide.Now;
-                            compilerStream.SendMessage(msg);
+                            Log(LogType.Info, logMessage);
+                            break;
+                        }
+                        case 1:
+                        {
+                            Log(LogType.Info, logMessage + ", sending compilation. . .");
+                            break;
+                        }
+                        default:
+                        {
+                            Log(LogType.Info, logMessage + $", sending {_messageQueue.Count} compilations. . .");
+                            break;
                         }
                     }
+
+                    if (!_ready)
+                    {
+                        _ready = true;
+
+                        while (_messageQueue.TryDequeue(out CompilerMessage compilerMessage))
+                        {
+                            _compilations[compilerMessage.Id].startedAt = Interface.Oxide.Now;
+                            _messageBrokerService?.SendMessage(compilerMessage);
+                        }
+                    }
+
                     break;
+                }
             }
 
-            Interface.Oxide.NextTick(() =>
+            Interface.Oxide.NextTick(ResetIdleTimer);
+        }
+
+        internal void Stop(bool synchronous, string reason)
+        {
+            _ready = false;
+            Process? compilerProcess = _compilerProcess;
+            if (compilerProcess == null)
             {
-                ResetIdleTimer();
-            });
+                return;
+            }
+
+            _compilerProcess = null;
+            compilerProcess.Exited -= OnCompilerProcessExited;
+            compilerProcess.Refresh();
+
+            if (!string.IsNullOrEmpty(reason))
+            {
+                Interface.Oxide.LogInfo($"Shutting down compiler because {reason}");
+            }
+
+            if (!compilerProcess.HasExited)
+            {
+                _messageBrokerService.SendShutdownMessage();
+
+                if (synchronous)
+                {
+                    if (compilerProcess.WaitForExit(10000))
+                    {
+                        Interface.Oxide.LogInfo("Compiler shutdown completed");
+                    }
+                    else
+                    {
+                        Interface.Oxide.LogWarning(
+                            "Compiler failed to gracefully shutdown, killing the process...");
+                        compilerProcess.Kill();
+                    }
+
+                    compilerProcess.Close();
+                }
+                else
+                {
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        if (compilerProcess.WaitForExit(50000))
+                        {
+                            Interface.Oxide.LogInfo("Compiler shutdown completed");
+                        }
+                        else
+                        {
+                            Interface.Oxide.LogWarning(
+                                "Compiler failed to gracefully shutdown, killing the process...");
+                            compilerProcess.Kill();
+                        }
+
+                        compilerProcess.Close();
+                    });
+                }
+            }
+            else
+            {
+                compilerProcess.Close();
+                Log(LogType.Info, "Released compiler resources");
+            }
+
+            _messageBrokerService.OnMessageReceived -= OnMessageReceived;
+            _messageBrokerService.Stop();
+            _messageBrokerService = null;
+
+            ExpireFileCache();
         }
 
         private void OnError(Exception exception) => OnCompilerFailed($"Compiler threw a error: {exception}");
 
-        private void OnProcessExited(object sender, EventArgs eventArgs)
+        private void OnCompilerProcessExited(object sender, EventArgs eventArgs)
         {
             Interface.Oxide.NextTick(() =>
             {
@@ -509,22 +527,23 @@ namespace Oxide.CSharp
 
         private void ResetIdleTimer()
         {
-            if (idleTimer != null)
+            _idleTimer?.Destroy();
+
+            if (!Interface.Oxide.Config.Compiler.IdleShutdown)
             {
-                idleTimer.Destroy();
+                return;
             }
 
-            if (Interface.Oxide.Config.Compiler.IdleShutdown)
-            {
-                idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(Interface.Oxide.Config.Compiler.IdleTimeout, () => Stop(false, "idle shutdown"));
-            }
+            _idleTimer = Interface.Oxide.GetLibrary<Core.Libraries.Timer>().Once(Interface.Oxide.Config.Compiler.IdleTimeout,
+                () => Stop(false, "idle shutdown"));
         }
 
         internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
         {
-            int id = lastId++;
+            ResetIdleTimer();
+            int id = _lastId++;
             Compilation compilation = new Compilation(id, callback, plugins);
-            compilations[id] = compilation;
+            _compilations[id] = compilation;
             compilation.Prepare(() => EnqueueCompilation(compilation));
         }
 
@@ -559,7 +578,7 @@ namespace Oxide.CSharp
                     continue;
                 }
 
-                foreach (string include in plugin.IncludePaths.Distinct())
+                foreach (string include in plugin.IncludePaths)
                 {
                     if (includedFiles.Contains(include))
                     {
@@ -587,37 +606,41 @@ namespace Oxide.CSharp
             if (sourceFiles.Count == 0)
             {
                 Interface.Oxide.LogError("Compilation job contained no valid plugins");
-                compilations.Remove(compilation.id);
+                _compilations.Remove(compilation.id);
                 compilation.Completed();
                 return;
             }
 
-            CompilerData data = new CompilerData
+            CompilerData compilerData = new CompilerData
             {
                 OutputFile = compilation.name,
-                SourceFiles = sourceFiles.ToArray(),
+                SourceFiles = sourceFiles,
                 ReferenceFiles = compilation.references.Values.ToArray(),
-                Preprocessor = preprocessor
-                #if DEBUG
-                , Debug = true
-                #endif
+                Preprocessor = _preprocessor,
+                Debug = Debugger.IsAttached,
             };
 
-            CompilerMessage message = new CompilerMessage { Id = compilation.id, Data = data, Type = CompilerMessageType.Compile };
-            if (ready)
+            CompilerMessage compilerMessage = new CompilerMessage
+            {
+                Id = compilation.id,
+                Type = MessageType.Data,
+                Data = Constants.Serializer.Serialize(compilerData),
+            };
+
+            if (_ready)
             {
                 compilation.startedAt = Interface.Oxide.Now;
-                compilerStream.SendMessage(message);
+                _messageBrokerService.SendMessage(compilerMessage);
             }
             else
             {
-                messageQueue.Enqueue(message);
+                _messageQueue.Enqueue(compilerMessage);
             }
         }
 
         private void OnCompilerFailed(string reason)
         {
-            foreach (Compilation compilation in compilations.Values)
+            foreach (Compilation compilation in _compilations.Values)
             {
                 foreach (CompilablePlugin plugin in compilation.plugins)
                 {
@@ -626,7 +649,8 @@ namespace Oxide.CSharp
 
                 compilation.Completed();
             }
-            compilations.Clear();
+
+            _compilations.Clear();
         }
 
         private static bool SetFilePermissions(string filePath)
@@ -635,14 +659,16 @@ namespace Oxide.CSharp
             {
                 case PlatformID.Unix:
                 case PlatformID.MacOSX:
+                {
                     break;
-
+                }
                 default:
+                {
                     return true;
+                }
             }
 
             string name = Path.GetFileName(filePath);
-
             try
             {
                 if (Syscall.access(filePath, AccessModes.X_OK) == 0)
@@ -664,6 +690,7 @@ namespace Oxide.CSharp
             {
                 Interface.Oxide.LogException($"Could not set {filePath} as executable, please set manually", ex);
             }
+
             return false;
         }
 
@@ -793,23 +820,28 @@ namespace Oxide.CSharp
                 switch (statusCode)
                 {
                     case 304:
+                    {
                         newerFound = false;
                         return true;
-
+                    }
                     case 200:
+                    {
                         break;
-
+                    }
                     default:
+                    {
                         if (current <= retries)
                         {
                             current++;
                             Thread.Sleep(1000);
-                            return TryDownload(url, retries, ref current, lastModified, out data, out code, out newerFound, ref md5);
+                            return TryDownload(url, retries, ref current, lastModified, out data, out code,
+                                out newerFound, ref md5);
                         }
                         else
                         {
                             return false;
                         }
+                    }
                 }
 
                 MemoryStream fs = new MemoryStream();
@@ -870,7 +902,7 @@ namespace Oxide.CSharp
                 return "0.0.0";
             }
 
-            FileVersionInfo version = FileVersionInfo.GetVersionInfo(filePath);
+            FileVersionInfo version = FileVersionInfo.GetVersionInfo(_filePath);
             return version.FileVersion;
         }
 
@@ -890,7 +922,7 @@ namespace Oxide.CSharp
         /// <returns></returns>
         private string EscapeSymbolName(string name)
         {
-            return SymbolEscapeRegex.Replace(name, "_");
+            return Constants.SymbolEscapeRegex.Replace(name, "_");
         }
     }
 }

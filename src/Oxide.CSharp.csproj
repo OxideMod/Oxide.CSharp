@@ -12,9 +12,11 @@
     <PackageIconUrl>icon.png</PackageIconUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
-    <TargetFrameworks>net35;net40;net45;net46;net48;netstandard2.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net48</TargetFrameworks>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <NoWarn>NU1701</NoWarn>
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Oxide.Common" Version="2.0.30-messaging" />
