@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 
 using Oxide.CSharp.Patching.Validation;
 using References::Mono.Cecil;
@@ -20,7 +20,7 @@ namespace Oxide.CSharp.Patching
     public class Publicizer : TraversePatch
     {
         [HasVisability(false)]
-        [IsSpecialName(InverseCheck = false)]
+        // [IsSpecialName(InverseCheck = false)]
         [HasAttribute("CompilerGeneratedAttribute", StringValidationType.EndsWith, InverseCheck = true)]
         [HasAttribute("CompilerServices.ExtensionAttribute", StringValidationType.EndsWith, InverseCheck = true)]
         protected override bool OnMemberDefinition(IMemberDefinition member)
