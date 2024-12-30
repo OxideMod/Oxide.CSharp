@@ -48,6 +48,8 @@ namespace Oxide.CSharp.Patching
                 TypeDefinition type = types[t];
                 RecurseType(type, context);
             }
+
+            OnPatchFinished(context);
         }
 
         private void RecurseType(TypeDefinition type, PatchContext context)
@@ -199,6 +201,10 @@ namespace Oxide.CSharp.Patching
         protected virtual bool OnEventDefinition(EventDefinition @event)
         {
             return false;
+        }
+
+        protected virtual void OnPatchFinished(PatchContext context)
+        {
         }
 
         protected bool RunValidation(IMemberDefinition member, IEnumerable<PatchValidationAttribute> validations)

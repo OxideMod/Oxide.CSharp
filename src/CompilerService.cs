@@ -73,6 +73,11 @@ namespace Oxide.CSharp
             EnvironmentHelper.SetVariable("Path:Configuration", Interface.Oxide.ConfigDirectory);
             EnvironmentHelper.SetVariable("Path:Data", Interface.Oxide.DataDirectory);
             EnvironmentHelper.SetVariable("Path:Libraries", Interface.Oxide.ExtensionDirectory);
+
+            if (Interface.Oxide.Config.Compiler.Publicize)
+            {
+                EnvironmentHelper.SetVariable("AllowPublicize", "true", force: true);
+            }
         }
 
         private void ExpireFileCache()
@@ -134,6 +139,12 @@ namespace Oxide.CSharp
             if (Interface.Oxide.Config.Compiler.PreprocessorDirectives.Count > 0)
             {
                 preprocessorList.AddRange(Interface.Oxide.Config.Compiler.PreprocessorDirectives);
+            }
+
+            if (Interface.Oxide.Config.Compiler.Publicize)
+            {
+                EnvironmentHelper.SetVariable("AllowPublicize", "true", force: true);
+                preprocessorList.Add("OXIDE_PUBLICIZED");
             }
 
             preprocessor = preprocessorList.Distinct().ToArray();

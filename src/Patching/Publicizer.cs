@@ -2,6 +2,8 @@
 
 using Oxide.CSharp.Patching.Validation;
 using References::Mono.Cecil;
+using System;
+using System.IO;
 
 namespace Oxide.CSharp.Patching
 {
@@ -71,6 +73,32 @@ namespace Oxide.CSharp.Patching
 
             method.IsPublic = true;
             return true;
+        }
+
+        protected override void OnPatchFinished(PatchContext context)
+        {
+            string writePath = EnvironmentHelper.GetVariable("PublicizerOutput");
+
+            if (!string.IsNullOrEmpty(writePath))
+            {
+                string name = context.Assembly.Name.Name;
+                if (!Directory.Exists(writePath))
+                {
+                    Log($"Failed to write {name} because PublicizeOutput {writePath} doesn't exist", Core.Logging.LogType.Error);
+                    return;
+                }
+
+                try
+                {
+                    name = Path.Combine(writePath, name + ".dll");
+                    context.Assembly.Write(name);
+                    Log($"Wrote publicized assembly to {writePath}");
+                }
+                catch (Exception e)
+                {
+                    Log($"Failed to write publicized assembly to {writePath}", Core.Logging.LogType.Error, e);
+                }
+            }
         }
     }
 }
