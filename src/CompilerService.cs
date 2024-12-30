@@ -74,7 +74,7 @@ namespace Oxide.CSharp
             EnvironmentHelper.SetVariable("Path:Data", Interface.Oxide.DataDirectory);
             EnvironmentHelper.SetVariable("Path:Libraries", Interface.Oxide.ExtensionDirectory);
 
-            if (Interface.Oxide.Config.Compiler.Publicize)
+            if (Interface.Oxide.Config.Compiler.Publicize ?? false)
             {
                 EnvironmentHelper.SetVariable("AllowPublicize", "true", force: true);
             }
@@ -162,7 +162,7 @@ namespace Oxide.CSharp
                 preprocessorList.AddRange(Interface.Oxide.Config.Compiler.PreprocessorDirectives);
             }
 
-            if (Interface.Oxide.Config.Compiler.Publicize)
+            if (Interface.Oxide.Config.Compiler.Publicize ?? false)
             {
                 EnvironmentHelper.SetVariable("AllowPublicize", "true", force: true);
                 preprocessorList.Add("OXIDE_PUBLICIZED");
