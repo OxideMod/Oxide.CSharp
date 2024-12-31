@@ -19,7 +19,7 @@ namespace Oxide.CSharp.Patching
     [HasEnvironmentalVariable("AllowPublicize")]
     public class Publicizer : TraversePatch
     {
-        [HasVisability(false)]
+        [HasVisibility(false)]
         // [IsSpecialName(InverseCheck = false)]
         [HasAttribute("CompilerGeneratedAttribute", StringValidationType.EndsWith, InverseCheck = true)]
         [HasAttribute("CompilerServices.ExtensionAttribute", StringValidationType.EndsWith, InverseCheck = true)]

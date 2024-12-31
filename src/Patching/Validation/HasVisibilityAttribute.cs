@@ -1,18 +1,16 @@
 ﻿extern alias References;
 
 using References::Mono.Cecil;
-using System;
-using System.Reflection;
 
 namespace Oxide.CSharp.Patching.Validation
 {
-    public class HasVisabilityAttribute : PatchValidationAttribute
+    public class HasVisibilityAttribute : PatchValidationAttribute
     {
         public bool IsPublic { get; }
 
         public bool? IsStatic { get; set; }
 
-        public HasVisabilityAttribute(bool isPublic)
+        public HasVisibilityAttribute(bool isPublic)
         {
             IsPublic = isPublic;
         }
@@ -50,11 +48,42 @@ namespace Oxide.CSharp.Patching.Validation
             }
             else if (item is PropertyDefinition prop)
             {
-                return prop.SetMethod != null ? IsValid(prop.GetMethod) && IsValid(prop.SetMethod) : IsValid(prop.GetMethod);
+                if (IsPublic)
+                {
+                    return prop.SetMethod != null ? IsValid(prop.GetMethod) && IsValid(prop.SetMethod) : IsValid(prop.GetMethod);
+                }
+                else
+                {
+                    return prop.SetMethod != null ? IsValid(prop.GetMethod) || IsValid(prop.SetMethod) : IsValid(prop.GetMethod);
+                }
             }
             else if (item is EventDefinition @event)
             {
                 return @event.AddMethod != null && IsValid(@event.AddMethod);
+            }
+            else if (item is MethodDefinition method)
+            {
+                if (IsStatic.HasValue)
+                {
+                    if (method.IsStatic != IsStatic.Value)
+                    {
+                        return false;
+                    }
+                }
+
+                return method.IsPublic == IsPublic;
+            }
+            else if (item is FieldDefinition field)
+            {
+                if (IsStatic.HasValue)
+                {
+                    if (field.IsStatic != IsStatic.Value)
+                    {
+                        return false;
+                    }
+                }
+
+                return field.IsPublic == IsPublic;
             }
             else if  (item is IMemberDefinition)
             {
