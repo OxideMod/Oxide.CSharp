@@ -16,6 +16,7 @@ namespace Oxide.CSharp.Patching
     [HasName("netstandard", InverseCheck = true)]
     [HasName("Oxide", InverseCheck = true)]
     [HasName("MySql.Data", InverseCheck = true)]
+    [HasConfigNames(InverseCheck = true)]
     [HasEnvironmentalVariable("AllowPublicize")]
     public class Publicizer : TraversePatch
     {

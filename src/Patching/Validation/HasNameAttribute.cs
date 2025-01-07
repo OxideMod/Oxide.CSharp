@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 
 using References::Mono.Cecil;
 using System;
@@ -8,7 +8,7 @@ namespace Oxide.CSharp.Patching.Validation
 {
     public class HasNameAttribute : PatchValidationAttribute
     {
-        public string ValidationRule { get; }
+        public string ValidationRule { get; internal set; }
 
         public StringValidationType ValidationType { get; }
 
