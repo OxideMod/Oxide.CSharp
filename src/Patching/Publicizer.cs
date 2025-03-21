@@ -33,7 +33,7 @@ namespace Oxide.CSharp.Patching
         {
             if (type.IsNested && !type.IsNestedPublic)
             {
-                type.IsNestedPrivate = true;
+                type.IsNestedPublic = true;
                 return true;
             }
 
