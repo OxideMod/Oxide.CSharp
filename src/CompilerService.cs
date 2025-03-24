@@ -56,19 +56,17 @@ namespace Oxide.CSharp
                 case PlatformID.Win32Windows:
                 {
                     _filePath += ".exe";
-                    string arc = IntPtr.Size == 8 ? "x64" : "x86";
-                    _remoteName = downloadUrl + $"win-{arc}.Compiler.exe";
-                    break;
-                }
-                case PlatformID.MacOSX:
-                {
-                    _remoteName = downloadUrl + "osx-x64.Compiler";
+                    _remoteName = downloadUrl + $"win-x64.AOT.Compiler.exe";
                     break;
                 }
                 case PlatformID.Unix:
                 {
                     _remoteName = downloadUrl + "linux-x64.Compiler";
                     break;
+                }
+                case PlatformID.MacOSX:
+                {
+                    throw new PlatformNotSupportedException("macOS is not supported for the compiler");
                 }
             }
 
