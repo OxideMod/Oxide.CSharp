@@ -176,7 +176,7 @@ namespace Oxide.CSharp
             _preprocessor = preprocessorList.Distinct().ToArray();
 
 #if DEBUG
-            Log(LogType.Debug, $"Preprocessors are: {string.Join(", ", preprocessor)}");
+            Log(LogType.Debug, $"Preprocessors are: {string.Join(", ", _preprocessor)}");
 #endif
 
 
