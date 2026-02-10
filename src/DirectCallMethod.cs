@@ -45,22 +45,22 @@ namespace Oxide.Core.CSharp
             this.module = module;
             this.type = type;
 
-            getLength = module.Import(typeof(string).GetMethod("get_Length", new Type[0]));
-            getChars = module.Import(typeof(string).GetMethod("get_Chars", new[] { typeof(int) }));
-            isNullOrEmpty = module.Import(typeof(string).GetMethod("IsNullOrEmpty", new[] { typeof(string) }));
-            stringEquals = module.Import(typeof(string).GetMethod("Equals", new[] { typeof(string) }));
+            getLength = module.ImportReference(typeof(string).GetMethod("get_Length", new Type[0]));
+            getChars = module.ImportReference(typeof(string).GetMethod("get_Chars", new[] { typeof(int) }));
+            isNullOrEmpty = module.ImportReference(typeof(string).GetMethod("IsNullOrEmpty", new[] { typeof(string) }));
+            stringEquals = module.ImportReference(typeof(string).GetMethod("Equals", new[] { typeof(string) }));
 
             // Copy method definition from base class
             AssemblyDefinition base_assembly = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll"), readerParameters);
             ModuleDefinition base_module = base_assembly.MainModule;
-            TypeDefinition base_type = module.Import(base_assembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
-            MethodDefinition base_method = module.Import(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
+            TypeDefinition base_type = module.ImportReference(base_assembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
+            MethodDefinition base_method = module.ImportReference(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
 
             // Create method override based on virtual method signature
-            method = new MethodDefinition(base_method.Name, base_method.Attributes, base_module.Import(base_method.ReturnType)) { DeclaringType = type };
+            method = new MethodDefinition(base_method.Name, base_method.Attributes, base_module.ImportReference(base_method.ReturnType)) { DeclaringType = type };
             foreach (ParameterDefinition parameter in base_method.Parameters)
             {
-                ParameterDefinition new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, module.Import(parameter.ParameterType))
+                ParameterDefinition new_param = new ParameterDefinition(parameter.Name, parameter.Attributes, module.ImportReference(parameter.ParameterType))
                 {
                     IsOut = parameter.IsOut,
                     Constant = parameter.Constant,
@@ -69,7 +69,7 @@ namespace Oxide.Core.CSharp
                 };
                 foreach (CustomAttribute attribute in parameter.CustomAttributes)
                 {
-                    new_param.CustomAttributes.Add(new CustomAttribute(module.Import(attribute.Constructor)));
+                    new_param.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
                 }
 
                 method.Parameters.Add(new_param);
@@ -77,7 +77,7 @@ namespace Oxide.Core.CSharp
 
             foreach (CustomAttribute attribute in base_method.CustomAttributes)
             {
-                method.CustomAttributes.Add(new CustomAttribute(module.Import(attribute.Constructor)));
+                method.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
             }
 
             method.ImplAttributes = base_method.ImplAttributes;
@@ -94,8 +94,8 @@ namespace Oxide.Core.CSharp
             type.Methods.Add(method);
 
             // Create variables
-            body.Variables.Add(new VariableDefinition("name_size", module.TypeSystem.Int32));
-            body.Variables.Add(new VariableDefinition("i", module.TypeSystem.Int32));
+            body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+            body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
 
             // Initialize return value to null
             AddInstruction(OpCodes.Ldarg_2);
@@ -298,11 +298,11 @@ namespace Oxide.Core.CSharp
                 ByReferenceType param = parameter.ParameterType as ByReferenceType;
                 if (param != null)
                 {
-                    VariableDefinition refParam = AddVariable(module.Import(param.ElementType));
+                    VariableDefinition refParam = AddVariable(module.ImportReference(param.ElementType));
                     AddInstruction(OpCodes.Ldarg_3);    // object[] params
                     AddInstruction(Ldc_I4_n(i));        // param_number
                     AddInstruction(OpCodes.Ldelem_Ref);
-                    AddInstruction(OpCodes.Unbox_Any, module.Import(param.ElementType));
+                    AddInstruction(OpCodes.Unbox_Any, module.ImportReference(param.ElementType));
                     AddInstruction(OpCodes.Stloc_S, refParam);
                     paramDict[parameter] = refParam;
                 }
@@ -328,10 +328,10 @@ namespace Oxide.Core.CSharp
                     AddInstruction(OpCodes.Ldarg_3);    // object[] params
                     AddInstruction(Ldc_I4_n(i));        // param_number
                     AddInstruction(OpCodes.Ldelem_Ref);
-                    AddInstruction(OpCodes.Unbox_Any, module.Import(parameter.ParameterType));
+                    AddInstruction(OpCodes.Unbox_Any, module.ImportReference(parameter.ParameterType));
                 }
             }
-            AddInstruction(OpCodes.Call, module.Import(method));
+            AddInstruction(OpCodes.Call, module.ImportReference(method));
 
             //handle ref/out params
             for (int i = 0; i < method.Parameters.Count; i++)
@@ -343,7 +343,7 @@ namespace Oxide.Core.CSharp
                     AddInstruction(OpCodes.Ldarg_3);    // object[] params
                     AddInstruction(Ldc_I4_n(i));        // param_number
                     AddInstruction(OpCodes.Ldloc_S, paramDict[parameter]);
-                    AddInstruction(OpCodes.Box, module.Import(param.ElementType));
+                    AddInstruction(OpCodes.Box, module.ImportReference(param.ElementType));
                     AddInstruction(OpCodes.Stelem_Ref);
                 }
             }
@@ -352,7 +352,7 @@ namespace Oxide.Core.CSharp
             {
                 if (method.ReturnType.Name != "Object")
                 {
-                    AddInstruction(OpCodes.Box, module.Import(method.ReturnType));
+                    AddInstruction(OpCodes.Box, module.ImportReference(method.ReturnType));
                 }
 
                 AddInstruction(OpCodes.Stind_Ref);
@@ -413,9 +413,9 @@ namespace Oxide.Core.CSharp
             return instruction;
         }
 
-        public VariableDefinition AddVariable(TypeReference typeRef, string name = "")
+        public VariableDefinition AddVariable(TypeReference typeRef)
         {
-            VariableDefinition def = new VariableDefinition(name, typeRef);
+            VariableDefinition def = new VariableDefinition(typeRef);
             body.Variables.Add(def);
             return def;
         }
