@@ -1,11 +1,13 @@
 ﻿extern alias References;
 using System;
+using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
 using Oxide.CompilerServices;
 using Oxide.Core;
 using Oxide.CSharp.Common;
+using Oxide.Pooling;
 
 namespace Oxide.CSharp.CompilerStream
 {
@@ -34,6 +36,20 @@ namespace Oxide.CSharp.CompilerStream
 
             CancellationToken cancellationToken = _cancellationTokenSource.Token;
             Task.Run(() => WorkerAsync(cancellationToken), cancellationToken);
+        }
+
+        public void SendMessage(CompilerMessage message) => WriteMessage(message);
+
+        public int SendShutdownMessage()
+        {
+            CompilerMessage message = new()
+            {
+                Id = _messageId++,
+                Type = MessageType.Shutdown,
+            };
+
+            SendMessage(message);
+            return message.Id;
         }
 
         private async Task WorkerAsync(CancellationToken cancellationToken)
@@ -72,49 +88,63 @@ namespace Oxide.CSharp.CompilerStream
             }
         }
 
-        public void SendMessage(CompilerMessage message) => WriteMessage(message);
-
         private void WriteMessage(CompilerMessage message)
         {
+            byte[] headerBuffer = ArrayPool<byte>.Shared.Take(sizeof(int));
             try
             {
-                byte[] data = Constants.Serializer.Serialize(message);
-                byte[] buffer = new byte[sizeof(int) + data.Length];
-                int destinationIndex = data.Length.WriteBigEndian(buffer);
-                Array.Copy(data, 0, buffer, destinationIndex, data.Length);
-                OnWrite(buffer, 0, buffer.Length);
+                using MemoryStream memoryStream = new();
+                Constants.Serializer.SerializeToStream(memoryStream, message, DefaultMaxBufferSize);
+
+                int length = (int)memoryStream.Length;
+
+                length.WriteBigEndian(headerBuffer);
+
+                _pipeServer.Write(headerBuffer, 0, sizeof(int));
+                _pipeServer.Write(memoryStream.GetBuffer(), 0, length);
             }
             catch (Exception exception)
             {
                 Interface.Oxide.LogError($"Error sending message to compiler: {exception}");
             }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(headerBuffer);
+            }
         }
 
         private CompilerMessage? ReadMessage()
         {
-            byte[] buffer = new byte[sizeof(int)];
+            byte[] headerBuffer = ArrayPool<byte>.Shared.Take(sizeof(int));
             int read = 0;
             try
             {
-                while (read < buffer.Length)
+                while (read < headerBuffer.Length)
                 {
-                    read += OnRead(buffer, read, buffer.Length - read);
+                    read += OnRead(headerBuffer, read, headerBuffer.Length - read);
                     if (read == 0)
                     {
                         return null;
                     }
                 }
 
-                int length = buffer.ReadBigEndian();
-                byte[] buffer2 = new byte[length];
-
-                read = 0;
-                while (read < length)
+                int length = headerBuffer.ReadBigEndian();
+                byte[] messageBuffer = ArrayPool<byte>.Shared.Take(length);
+                try
                 {
-                    read += OnRead(buffer2, read, length - read);
-                }
 
-                return Constants.Serializer.Deserialize<CompilerMessage>(buffer2);
+                    read = 0;
+                    while (read < length)
+                    {
+                        read += OnRead(messageBuffer, read, length - read);
+                    }
+
+                    return Constants.Serializer.Deserialize<CompilerMessage>(messageBuffer);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(messageBuffer);
+                }
             }
             catch (Exception exception)
             {
@@ -126,21 +156,9 @@ namespace Oxide.CSharp.CompilerStream
                 Interface.Oxide.LogError($"Error reading message from compiler: {exception}");
                 return null;
             }
-        }
-
-        private void OnWrite(byte[] buffer, int index, int count)
-        {
-            Validate(buffer, index, count);
-
-            int remaining = count;
-            int written = 0;
-            while (remaining > 0)
+            finally
             {
-                int toWrite = Math.Min(DefaultMaxBufferSize, remaining);
-                _pipeServer.Write(buffer, index + written, toWrite);
-                remaining -= toWrite;
-                written += toWrite;
-                _pipeServer.Flush();
+                ArrayPool<byte>.Shared.Return(headerBuffer);
             }
         }
 
@@ -166,31 +184,6 @@ namespace Oxide.CSharp.CompilerStream
             }
 
             return read;
-        }
-
-        public int SendShutdownMessage()
-        {
-            CompilerMessage message = new CompilerMessage
-            {
-                Id = _messageId++,
-                Type = MessageType.Shutdown,
-            };
-
-            SendMessage(message);
-            return message.Id;
-        }
-
-        public int SendCompileMessage(CompilerData project)
-        {
-            CompilerMessage message = new CompilerMessage
-            {
-                Id = _messageId++,
-                Type = MessageType.Data,
-                Data = Constants.Serializer.Serialize(project)
-            };
-
-            SendMessage(message);
-            return message.Id;
         }
 
         private void Validate(byte[] buffer, int index, int count)
@@ -220,6 +213,7 @@ namespace Oxide.CSharp.CompilerStream
         public void Stop()
         {
             _cancellationTokenSource.Cancel();
+            _cancellationTokenSource.Dispose();
             _pipeServer.Disconnect();
             _pipeServer.Dispose();
         }
