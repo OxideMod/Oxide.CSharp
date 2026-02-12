@@ -176,10 +176,10 @@ namespace Oxide.CSharp
 #endif
 
 
-            /*if (!DownloadFile(remoteName, filePath, 3))
+            if (!DownloadFile(_remoteName, _filePath))
             {
                 return false;
-            }*/
+            }
 
             return SetFilePermissions(_filePath);
         }
