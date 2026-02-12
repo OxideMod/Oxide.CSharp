@@ -304,33 +304,20 @@ namespace Oxide.CSharp
                     }
 
                     compilation.endedAt = Interface.Oxide.Now;
-                    string stdOutput = (string)message.ExtraData;
-                    if (stdOutput != null)
+                    Log(LogType.Info, $"Compiler returned data for compilation {compilation.name} (Took: {Math.Round((compilation.endedAt - compilation.startedAt) * 1000f)}ms) | Errors: {message.Errors?.Count}");
+
+                    if (message.Errors != null)
                     {
-                        foreach (string line in stdOutput.Split(new[] { '\r', '\n' },
-                                     StringSplitOptions.RemoveEmptyEntries))
+                        foreach (CompilerError error in message.Errors)
                         {
-                            Match match = Constants.FileErrorRegex.Match(line.Trim());
-                            if (!match.Success)
-                            {
-                                continue;
-                            }
+                            Log(LogType.Error, $"Compiler error for compilation {compilation.name}: {error.Message}");
 
-                            if (match.Groups["Severity"].Value != "Error")
-                            {
-                                continue;
-                            }
-
-                            string fileName = match.Groups["File"].Value;
-                            string scriptName = Path.GetFileNameWithoutExtension(fileName);
-                            string error = match.Groups["Message"].Value;
-
-                            CompilablePlugin compilablePlugin =
-                                compilation.plugins.SingleOrDefault(pl => pl.ScriptName == scriptName);
+                            CompilablePlugin? compilablePlugin =
+                                compilation.plugins.SingleOrDefault(pl => pl.ScriptName == error.File);
 
                             if (compilablePlugin == null)
                             {
-                                Interface.Oxide.LogError($"Unable to resolve script error to {fileName}: {error}");
+                                Interface.Oxide.LogError($"Unable to resolve script error to {error.File}: {error.Message}");
                                 continue;
                             }
 
@@ -342,13 +329,14 @@ namespace Oxide.CSharp
                             {
                                 compilablePlugin.CompilerErrors = $"Missing dependencies: {string.Join(",", missingRequirementsArray)}";
 
-                                Log(LogType.Error, $"[{match.Groups["Severity"].Value}][{scriptName}] Missing dependencies: {string.Join(",", missingRequirementsArray)}");
+                                Log(LogType.Error, $"[{error.File}] Missing dependencies: {string.Join(",", missingRequirementsArray)}");
                             }
                             else
                             {
-                                compilablePlugin.CompilerErrors = error.Trim()
-                                    .Replace(Interface.Oxide.PluginDirectory + Path.DirectorySeparatorChar,
-                                        string.Empty);
+                                // TODO: Allow multiple errors
+                                compilablePlugin.CompilerErrors = error.Message;
+
+                                Log(LogType.Error, $"[{error.File}] {error.Message}");
                             }
                         }
                     }
@@ -369,19 +357,21 @@ namespace Oxide.CSharp
                 }
                 case MessageType.Error:
                 {
-                    string exception = message.ExtraData;
                     Compilation compilation = _compilations[message.Id];
                     _compilations.Remove(message.Id);
 
+                    CompilerError? compilerError = message?.Errors?[0];
+                    string errorMessage = compilerError?.Message ?? "Unknown error occurred in compiler";
+
                     if (compilation == null)
                     {
-                        Interface.Oxide.LogError($"Compiler returned a error for a untracked compilation: {exception}");
+                        Interface.Oxide.LogError($"Compiler returned a error for a untracked compilation: {errorMessage}");
                         return;
                     }
 
                     foreach (CompilablePlugin p in compilation.plugins)
                     {
-                        p.CompilerErrors = exception;
+                        p.CompilerErrors = errorMessage;
                     }
 
                     compilation.Completed();
