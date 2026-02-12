@@ -369,19 +369,19 @@ namespace Oxide.CSharp
                 }
                 case MessageType.Error:
                 {
-                    Exception exception = (Exception)message.ExtraData;
+                    string exception = message.ExtraData;
                     Compilation compilation = _compilations[message.Id];
                     _compilations.Remove(message.Id);
 
                     if (compilation == null)
                     {
-                        Interface.Oxide.LogException("Compiler returned a error for a untracked compilation", exception);
+                        Interface.Oxide.LogError($"Compiler returned a error for a untracked compilation: {exception}");
                         return;
                     }
 
                     foreach (CompilablePlugin p in compilation.plugins)
                     {
-                        p.CompilerErrors = exception.Message;
+                        p.CompilerErrors = exception;
                     }
 
                     compilation.Completed();
