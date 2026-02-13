@@ -91,13 +91,14 @@ namespace Oxide.CSharp.CompilerStream
         private void WriteMessage(CompilerMessage message)
         {
             byte[] headerBuffer = ArrayPool<byte>.Shared.Take(sizeof(int));
+
+            using MemoryStream memoryStream = new();
+            using StreamWriter streamWriter = new(memoryStream, Constants.CompilerEncoding, DefaultMaxBufferSize);
             try
             {
-                using MemoryStream memoryStream = new();
-                Constants.Serializer.SerializeToStream(memoryStream, message, DefaultMaxBufferSize);
+                Constants.Serializer.GetJsonSerializer().Serialize(streamWriter, message);
 
                 int length = (int)memoryStream.Length;
-
                 length.WriteBigEndian(headerBuffer);
 
                 _pipeServer.Write(headerBuffer, 0, sizeof(int));
@@ -109,6 +110,7 @@ namespace Oxide.CSharp.CompilerStream
             }
             finally
             {
+                streamWriter.Flush();
                 ArrayPool<byte>.Shared.Return(headerBuffer);
             }
         }
