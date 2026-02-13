@@ -175,11 +175,12 @@ namespace Oxide.CSharp
             Log(LogType.Debug, $"Preprocessors are: {string.Join(", ", _preprocessor)}");
 #endif
 
-
+#if !DEBUG
             if (!DownloadFile(_remoteName, _filePath))
             {
                 return false;
             }
+#endif
 
             return SetFilePermissions(_filePath);
         }
