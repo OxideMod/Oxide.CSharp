@@ -3,8 +3,6 @@ using System;
 using System.IO;
 using Oxide.CSharp.Patching.Validation;
 using References::Mono.Cecil;
-using System;
-using System.IO;
 
 namespace Oxide.CSharp.Patching
 {

@@ -1,12 +1,10 @@
 ﻿using System.Text.RegularExpressions;
-using Oxide.CompilerServices;
 
 namespace Oxide.CSharp.Common
 {
     internal static class Constants
     {
-        //TODO: Move to Oxide.Common & optimize this is a temporary solution
-        internal static readonly ISerializer Serializer = new Serializer();
+        internal static readonly Serializer Serializer = new();
 
         internal const string CompilerDownloadUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
         internal const string CompilerBasicArguments = "-unsafe true --setting:Force true -ms true";
