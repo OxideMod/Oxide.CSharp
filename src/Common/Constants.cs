@@ -11,9 +11,6 @@ namespace Oxide.CSharp.Common
         internal const string CompilerDownloadUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
         internal const string CompilerBasicArguments = "-unsafe true --setting:Force true -ms true";
 
-        internal static readonly Regex FileErrorRegex = new Regex(@"^\[(?'Severity'\S+)\]\[(?'Code'\S+)\]\[(?'File'\S+)\] (?'Message'.+)$",
-            RegexOptions.Compiled);
-
         internal static readonly Regex BlankLineRegex = new Regex(@"^\s*\{?\s*$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
