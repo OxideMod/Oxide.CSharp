@@ -98,6 +98,8 @@ namespace Oxide.CSharp.CompilerStream
             {
                 Constants.Serializer.GetJsonSerializer().Serialize(streamWriter, message);
 
+                streamWriter.Flush();
+
                 int length = (int)memoryStream.Length;
                 length.WriteBigEndian(headerBuffer);
 
@@ -110,7 +112,6 @@ namespace Oxide.CSharp.CompilerStream
             }
             finally
             {
-                streamWriter.Flush();
                 ArrayPool<byte>.Shared.Return(headerBuffer);
             }
         }
