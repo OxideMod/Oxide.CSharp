@@ -45,7 +45,7 @@ namespace Oxide.Plugins
 
             foreach (CompilablePlugin plugin in plugins)
             {
-                plugin.CompilerErrors = null;
+                plugin.CompilerErrors.Clear();
                 plugin.OnCompilationStarted();
             }
 
@@ -77,7 +77,7 @@ namespace Oxide.Plugins
             }
 
             plugin.Loader.PluginLoadingStarted(plugin);
-            plugin.CompilerErrors = null;
+            plugin.CompilerErrors.Clear();
             plugin.OnCompilationStarted();
 
             foreach (Core.Plugins.Plugin pl in Interface.Oxide.RootPluginManager.GetPlugins().Where(pl => pl is CSharpPlugin))
@@ -100,7 +100,7 @@ namespace Oxide.Plugins
             }
 
             CompilablePlugin compilablePlugin = plugins.SingleOrDefault(pl => pl.Name == name);
-            return compilablePlugin != null && compilablePlugin.CompilerErrors == null;
+            return compilablePlugin is { CompilerErrors.Count: 0 };
         }
 
         internal void Prepare(Action callback)
@@ -221,7 +221,7 @@ namespace Oxide.Plugins
                 if (line.IndexOf("namespace uMod.Plugins", StringComparison.InvariantCultureIgnoreCase) >= 0)
                 {
                     Interface.Oxide.LogError($"Plugin {plugin.ScriptName}.cs is a uMod plugin, not an Oxide plugin. Please downgrade to the Oxide version if available.");
-                    plugin.CompilerErrors = $"Plugin {plugin.ScriptName}.cs is a uMod plugin, not an Oxide plugin. Please downgrade to the Oxide version if available.";
+                    plugin.CompilerErrors.Add($"Plugin {plugin.ScriptName}.cs is a uMod plugin, not an Oxide plugin. Please downgrade to the Oxide version if available.");
                     RemovePlugin(plugin);
                     return;
                 }
@@ -259,7 +259,7 @@ namespace Oxide.Plugins
                     if (className != plugin.Name)
                     {
                         Interface.Oxide.LogError($"Plugin filename {plugin.ScriptName}.cs must match the main class {className} (should be {className}.cs)");
-                        plugin.CompilerErrors = $"Plugin filename {plugin.ScriptName}.cs must match the main class {className} (should be {className}.cs)";
+                        plugin.CompilerErrors.Add($"Plugin filename {plugin.ScriptName}.cs must match the main class {className} (should be {className}.cs)");
                         RemovePlugin(plugin);
                     }
 
@@ -275,7 +275,7 @@ namespace Oxide.Plugins
                     if (!File.Exists(Path.Combine(plugin.Directory, dependencyName + ".cs")))
                     {
                         Interface.Oxide.LogError($"{plugin.Name} plugin requires missing dependency: {dependencyName}");
-                        plugin.CompilerErrors = $"Missing dependency: {dependencyName}";
+                        plugin.CompilerErrors.Add($"Missing dependency: {dependencyName}");
                         RemovePlugin(plugin);
                         return;
                     }
@@ -360,7 +360,7 @@ namespace Oxide.Plugins
 
                 string message = $"{fullName} is referenced by {plugin.Name} plugin but is not loaded";
                 Interface.Oxide.LogError(message);
-                plugin.CompilerErrors = message;
+                plugin.CompilerErrors.Add(message);
                 RemovePlugin(plugin);
             }
         }
@@ -401,7 +401,7 @@ namespace Oxide.Plugins
                 }
 
                 Interface.Oxide.LogError($"Assembly referenced by {plugin.Name} plugin does not exist: {assemblyNameString}.dll");
-                plugin.CompilerErrors = $"Referenced assembly does not exist: {assemblyNameString}";
+                plugin.CompilerErrors.Add($"Referenced assembly does not exist: {assemblyNameString}");
                 RemovePlugin(plugin);
                 return;
             }
@@ -414,7 +414,7 @@ namespace Oxide.Plugins
             catch (FileNotFoundException)
             {
                 Interface.Oxide.LogError($"Assembly referenced by {plugin.Name} plugin is invalid: {assemblyNameString}.dll");
-                plugin.CompilerErrors = $"Referenced assembly is invalid: {assemblyNameString}";
+                plugin.CompilerErrors.Add($"Referenced assembly is invalid: {assemblyNameString}");
                 RemovePlugin(plugin);
                 return;
             }
@@ -466,7 +466,7 @@ namespace Oxide.Plugins
                     if (!File.Exists(plugin.ScriptPath))
                     {
                         Interface.Oxide.LogWarning("Script no longer exists: {0}", plugin.Name);
-                        plugin.CompilerErrors = "Plugin file was deleted";
+                        plugin.CompilerErrors.Add("Plugin file was deleted");
                         RemovePlugin(plugin);
                         return false;
                     }

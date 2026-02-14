@@ -326,14 +326,13 @@ namespace Oxide.CSharp
                             string[] missingRequirementsArray = missingRequirements.ToArray();
                             if (missingRequirementsArray.Length > 0)
                             {
-                                compilablePlugin.CompilerErrors = $"Missing dependencies: {string.Join(",", missingRequirementsArray)}";
+                                compilablePlugin.CompilerErrors.Add($"Missing dependencies: {string.Join(",", missingRequirementsArray)}");
 
                                 Log(LogType.Error, $"[{error.File}] Missing dependencies: {string.Join(",", missingRequirementsArray)}");
                             }
                             else
                             {
-                                // TODO: Allow multiple errors
-                                compilablePlugin.CompilerErrors = error.Message;
+                                compilablePlugin.CompilerErrors.Add(error.Message);
 
                                 Log(LogType.Error, $"[{error.File}] {error.Message}");
                             }
@@ -370,7 +369,7 @@ namespace Oxide.CSharp
 
                     foreach (CompilablePlugin p in compilation.plugins)
                     {
-                        p.CompilerErrors = errorMessage;
+                        p.CompilerErrors.Add(errorMessage);
                     }
 
                     compilation.Completed();
@@ -558,7 +557,7 @@ namespace Oxide.CSharp
                 string name = Path.GetFileName(plugin.ScriptPath ?? plugin.ScriptName);
                 if (plugin.ScriptSource == null || plugin.ScriptSource.Length == 0)
                 {
-                    plugin.CompilerErrors = "No data contained in .cs file";
+                    plugin.CompilerErrors.Add("No data contained in .cs file");
                     Log(LogType.Error, $"Ignoring plugin {name}, file is empty");
                     continue;
                 }
@@ -629,7 +628,7 @@ namespace Oxide.CSharp
             {
                 foreach (CompilablePlugin plugin in compilation.plugins)
                 {
-                    plugin.CompilerErrors = reason;
+                    plugin.CompilerErrors.Add(reason);
                 }
 
                 compilation.Completed();

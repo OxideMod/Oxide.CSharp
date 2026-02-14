@@ -209,7 +209,7 @@ namespace Oxide.Plugins
                     {
                         string sentence = missingRequirements.ToSentence();
                         Interface.Oxide.LogError($"{plugin.Name} plugin requires missing dependencies: {sentence}");
-                        PluginErrors[plugin.Name] = $"Missing dependencies: {sentence}";
+                        GetPluginErrors(plugin.Name).Add($"Missing dependencies: {sentence}");
                         PluginLoadingCompleted(plugin);
                     }
                 }
@@ -287,22 +287,23 @@ namespace Oxide.Plugins
                     foreach (CompilablePlugin plugin in compilation.plugins)
                     {
                         plugin.OnCompilationFailed();
-                        PluginErrors[plugin.Name] = $"Failed to compile: {plugin.CompilerErrors}";
-                        Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {plugin.CompilerErrors}");
+                        string errors = plugin.CompilerErrors.JoinValues(Environment.NewLine);
+                        GetPluginErrors(plugin.Name).Add($"Failed to compile: {errors}"); // todo: 2 messages are added when compiling fails
+                        Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {errors}");
                     }
                 }
                 else
                 {
                     if (compilation.plugins.Count > 0)
                     {
-                        string[] compiledNames = compilation.plugins.Where(pl => string.IsNullOrEmpty(pl.CompilerErrors)).Select(pl => pl.Name).ToArray();
+                        string[] compiledNames = compilation.plugins.Where(pl => pl.CompilerErrors.Count == 0).Select(pl => pl.Name).ToArray();
                         string verb = compiledNames.Length > 1 ? "were" : "was";
                         Interface.Oxide.LogInfo($"{compiledNames.ToSentence()} {verb} compiled successfully in {Math.Round(compilation.duration * 1000f)}ms");
                     }
 
                     foreach (CompilablePlugin plugin in compilation.plugins)
                     {
-                        if (plugin.CompilerErrors == null)
+                        if (plugin.CompilerErrors.Count == 0)
                         {
                             Interface.Oxide.UnloadPlugin(plugin.Name);
                             plugin.OnCompilationSucceeded(compilation.compiledAssembly);
@@ -310,8 +311,9 @@ namespace Oxide.Plugins
                         else
                         {
                             plugin.OnCompilationFailed();
-                            PluginErrors[plugin.Name] = $"Failed to compile: {plugin.CompilerErrors}";
-                            Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {plugin.CompilerErrors}");
+                            string errors = plugin.CompilerErrors.JoinValues(Environment.NewLine);
+                            GetPluginErrors(plugin.Name).Add($"Failed to compile: {errors}");
+                            Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {errors}");
                         }
                     }
                 }

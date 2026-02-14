@@ -24,7 +24,7 @@ namespace Oxide.Plugins
         public HashSet<string> Requires = new HashSet<string>();
         public HashSet<string> References = new HashSet<string>();
         public HashSet<string> IncludePaths = new HashSet<string>();
-        public string CompilerErrors;
+        public readonly HashSet<string> CompilerErrors;
         public CompiledAssembly CompiledAssembly;
         public DateTime LastModifiedAt;
         public DateTime LastCachedScriptAt;
@@ -47,6 +47,7 @@ namespace Oxide.Plugins
             ScriptName = name;
             ScriptPath = Path.Combine(Directory, $"{ScriptName}.cs");
             Name = Regex.Replace(ScriptName, "_", "");
+            CompilerErrors = new HashSet<string>();
             CheckLastModificationTime();
         }
 
@@ -124,7 +125,7 @@ namespace Oxide.Plugins
         internal void OnCompilationTimeout()
         {
             Interface.Oxide.LogError("Timed out waiting for plugin to be compiled: " + Name);
-            CompilerErrors = "Timed out waiting for compilation";
+            CompilerErrors.Add("Timed out waiting for compilation");
             OnCompilationFailed();
         }
 

@@ -124,7 +124,7 @@ namespace Oxide.Plugins
                     AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(assemblyStream, readerParameters);
 
                     int foundPlugins = 0;
-                    int totalPlugins = CompilablePlugins.Count(p => p.CompilerErrors == null);
+                    int totalPlugins = CompilablePlugins.Count(p => p.CompilerErrors.Count == 0);
                     for (int i = 0; i < assemblyDefinition.MainModule.Types.Count; i++)
                     {
                         if (foundPlugins == totalPlugins)
@@ -159,10 +159,7 @@ namespace Oxide.Plugins
                                         $"User defined constructors are not supported. Please remove the constructor from {typeDefinition.Name}.cs"); // Should be allowed
 
                                     CompilablePlugin plugin = CompilablePlugins.SingleOrDefault(p => p.Name == typeDefinition.Name);
-                                    if (plugin != null)
-                                    {
-                                        plugin.CompilerErrors = "Primary constructor in main class must be public";
-                                    }
+                                    plugin?.CompilerErrors.Add("Primary constructor in main class must be public");
                                 }
                                 else
                                 {

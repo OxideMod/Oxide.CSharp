@@ -343,7 +343,7 @@ namespace Oxide.Plugins
             catch (Exception ex)
             {
                 Interface.Oxide.LogException($"Failed to initialize plugin '{Name} v{Version}'", ex);
-                Loader.PluginErrors[Name] = ex.Message;
+                Loader.GetPluginErrors(Name).Add(ex.Message);
             }
         }
 

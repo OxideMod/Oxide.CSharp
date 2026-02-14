@@ -38,9 +38,9 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (CompilerErrors != null)
+                if (CompilerErrors.Count > 0)
                 {
-                    InitFailed($"Unable to load {ScriptName}. {CompilerErrors}");
+                    InitFailed($"Unable to load {ScriptName}. {CompilerErrors.JoinValues(Environment.NewLine)}");
                     return;
                 }
 
@@ -148,7 +148,7 @@ namespace Oxide.Plugins
             }
             Interface.Oxide.LogInfo("Rolling back plugin to last good version: {0}", ScriptName);
             CompiledAssembly = LastGoodAssembly;
-            CompilerErrors = null;
+            CompilerErrors.Clear();
             LoadPlugin();
         }
     }
