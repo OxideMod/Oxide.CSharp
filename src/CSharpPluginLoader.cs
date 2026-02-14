@@ -288,8 +288,8 @@ namespace Oxide.Plugins
                     {
                         plugin.OnCompilationFailed();
                         string errors = plugin.CompilerErrors.JoinValues(Environment.NewLine);
-                        GetPluginErrors(plugin.Name).Add($"Failed to compile: {errors}"); // todo: 2 messages are added when compiling fails
-                        Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {errors}");
+                        GetPluginErrors(plugin.Name).Add($"Failed to compile:{Environment.NewLine}{errors}");
+                        Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}:{Environment.NewLine}{errors}");
                     }
                 }
                 else
@@ -312,8 +312,8 @@ namespace Oxide.Plugins
                         {
                             plugin.OnCompilationFailed();
                             string errors = plugin.CompilerErrors.JoinValues(Environment.NewLine);
-                            GetPluginErrors(plugin.Name).Add($"Failed to compile: {errors}");
-                            Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}: {errors}");
+                            GetPluginErrors(plugin.Name).Add($"Failed to compile:{Environment.NewLine}{errors}");
+                            Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}:{Environment.NewLine}{errors}");
                         }
                     }
                 }
