@@ -32,7 +32,7 @@ namespace Oxide.Plugins
         private string includePath;
         private string[] extensionNames;
 
-        internal Compilation(int id, Action<Compilation> callback, CompilablePlugin[] plugins)
+        internal Compilation(int id, Action<Compilation> callback, List<CompilablePlugin> plugins)
         {
             this.id = id;
             this.callback = callback;

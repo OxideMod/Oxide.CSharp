@@ -339,7 +339,7 @@ namespace Oxide.CSharp
                         }
                     }
 
-                    CompilationResult compilationResult = Constants.Serializer.Deserialize<CompilationResult>(message.Data);
+                    CompilationResult? compilationResult = Constants.Serializer.Deserialize<CompilationResult>(message.Data);
                     if (compilationResult.Data == null || compilationResult.Data.Length == 0)
                     {
                         compilation.Completed();
@@ -522,11 +522,11 @@ namespace Oxide.CSharp
                 () => Stop(false, "idle shutdown"));
         }
 
-        internal void Compile(CompilablePlugin[] plugins, Action<Compilation> callback)
+        internal void Compile(List<CompilablePlugin> plugins, Action<Compilation> callback)
         {
             ResetIdleTimer();
             int id = _lastId++;
-            Compilation compilation = new Compilation(id, callback, plugins);
+            Compilation compilation = new(id, callback, plugins);
             _compilations[id] = compilation;
             compilation.Prepare(() => EnqueueCompilation(compilation));
         }

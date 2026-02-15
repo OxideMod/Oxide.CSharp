@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Oxide.CSharp.Common;
+using Oxide.Pooling;
 
 namespace Oxide.Plugins
 {
@@ -241,14 +242,27 @@ namespace Oxide.Plugins
                 Compilation.Current.Add(plugin);
                 return;
             }
+
             if (_compilationQueue.Count < 1)
             {
                 Interface.Oxide.NextTick(() =>
                 {
-                    CompileAssembly(_compilationQueue.ToArray());
-                    _compilationQueue.Clear();
+                    List<CompilablePlugin> compilablePlugins = PoolFactory<List<CompilablePlugin>>.Shared.Take();
+                    try
+                    {
+                        compilablePlugins.AddRange(_compilationQueue);
+                        _compilationQueue.Clear();
+
+                        CompileAssembly(compilablePlugins);
+                    }
+                    finally
+                    {
+                        compilablePlugins.Clear();
+                        PoolFactory<List<CompilablePlugin>>.Shared.Return(compilablePlugins);
+                    }
                 });
             }
+
             _compilationQueue.Add(plugin);
         }
 
@@ -278,7 +292,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void CompileAssembly(CompilablePlugin[] plugins)
+        private void CompileAssembly(List<CompilablePlugin> plugins)
         {
             _compiler.Compile(plugins, compilation =>
             {
@@ -291,31 +305,41 @@ namespace Oxide.Plugins
                         GetPluginErrors(plugin.Name).Add($"Failed to compile:{Environment.NewLine}{errors}");
                         Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}:{Environment.NewLine}{errors}");
                     }
-                }
-                else
-                {
-                    if (compilation.plugins.Count > 0)
-                    {
-                        string[] compiledNames = compilation.plugins.Where(pl => pl.CompilerErrors.Count == 0).Select(pl => pl.Name).ToArray();
-                        string verb = compiledNames.Length > 1 ? "were" : "was";
-                        Interface.Oxide.LogInfo($"{compiledNames.ToSentence()} {verb} compiled successfully in {Math.Round(compilation.duration * 1000f)}ms");
-                    }
 
+                    return;
+                }
+
+                if (compilation.plugins.Count == 0)
+                {
+                    return;
+                }
+
+                List<string> compiledPlugins = PoolFactory<List<string>>.Shared.Take();
+                try
+                {
                     foreach (CompilablePlugin plugin in compilation.plugins)
                     {
-                        if (plugin.CompilerErrors.Count == 0)
-                        {
-                            Interface.Oxide.UnloadPlugin(plugin.Name);
-                            plugin.OnCompilationSucceeded(compilation.compiledAssembly);
-                        }
-                        else
+                        if (plugin.CompilerErrors.Count > 0)
                         {
                             plugin.OnCompilationFailed();
                             string errors = plugin.CompilerErrors.JoinValues(Environment.NewLine);
                             GetPluginErrors(plugin.Name).Add($"Failed to compile:{Environment.NewLine}{errors}");
                             Interface.Oxide.LogError($"Error while compiling {plugin.ScriptName}:{Environment.NewLine}{errors}");
+                            continue;
                         }
+
+                        Interface.Oxide.UnloadPlugin(plugin.Name);
+                        plugin.OnCompilationSucceeded(compilation.compiledAssembly);
+                        compiledPlugins.Add(plugin.Name);
                     }
+
+                    string verb = compiledPlugins.Count > 1 ? "were" : "was";
+                    Interface.Oxide.LogInfo($"{compiledPlugins.JoinValues(", ")} {verb} compiled successfully in {Math.Round(compilation.duration * 1000f)}ms");
+                }
+                finally
+                {
+                    compiledPlugins.Clear();
+                    PoolFactory<List<string>>.Shared.Return(compiledPlugins);
                 }
             });
         }
