@@ -1,5 +1,7 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
+using Oxide.Core;
 
 namespace Oxide.CSharp.Common
 {
@@ -10,12 +12,8 @@ namespace Oxide.CSharp.Common
 
         internal const string CompilerDownloadUrl = "https://downloads.oxidemod.com/artifacts/Oxide.Compiler/{0}/";
         internal const string CompilerBasicArguments = "-unsafe true --setting:Force true -ms true";
-
-        internal static readonly Regex BlankLineRegex = new Regex(@"^\s*\{?\s*$",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        internal static readonly Regex CustomAttributeRegex =
-            new Regex(@"^\s*\[", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        internal const string OxideNamespace = "namespace Oxide.Plugins";
+        internal const string UmodNamespace = "namespace uMod.Plugins";
 
         internal static readonly Regex MainPluginClassNameRegex =
             new Regex(@"^\s*(?:public|private|protected|internal)?\s*class\s+(\S+)\s+\:\s+\S+Plugin\s*$",
@@ -34,14 +32,14 @@ namespace Oxide.CSharp.Common
         internal static readonly Regex PluginNameRegex = new Regex(@"Oxide\\.[\\w]+\\.([\\w]+)",
             RegexOptions.Compiled);
 
-        internal static readonly Regex NamespaceRegex = new Regex(@"^\s*namespace Oxide\.Plugins\s*(\{\s*)?$",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
         internal static readonly Regex PluginReferenceRegex = new Regex(@"^(Oxide\.(?:Ext|Game)\.(.+))$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         internal static readonly Regex IncludeRegex = new Regex(@"\\include\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         internal static readonly Regex SymbolEscapeRegex = new Regex(@"[^\w\d]", RegexOptions.Compiled);
+
+        internal static readonly string IncludePath = Path.Combine(Interface.Oxide.PluginDirectory, "include");
+        internal static readonly string CSharpPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll");
     }
 }
