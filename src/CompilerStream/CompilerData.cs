@@ -18,7 +18,7 @@ namespace Oxide.CSharp.CompilerStream
         public CompilerLanguageVersion Version { get; set; }
         public string Encoding { get; set; }
         public bool Debug { get; set; }
-        public string[] Preprocessor { get; set; }
+        public HashSet<string> Preprocessor { get; set; }
 
         public CompilerData()
         {

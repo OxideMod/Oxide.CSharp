@@ -36,7 +36,7 @@ namespace Oxide.CSharp
         private readonly string _filePath;
         private string _remoteName;
         private float _startTime;
-        private string[] _preprocessor;
+        private HashSet<string> _preprocessor;
         private readonly string _pipeName;
 
         public bool Installed => File.Exists(_filePath);
@@ -110,25 +110,24 @@ namespace Oxide.CSharp
 
         internal bool Precheck()
         {
-            List<string> preprocessorList = new List<string>
+            HashSet<string> preprocessors = new()
             {
                 "OXIDE",
                 "OXIDEMOD"
             };
 
-            Extension game = Interface.Oxide.GetAllExtensions().SingleOrDefault(e => e.IsGameExtension);
-
+            Extension? game = Interface.Oxide.GetAllExtensions().SingleOrDefault(e => e.IsGameExtension);
             if (game != null)
             {
                 string name = game.Name.ToUpperInvariant();
                 string branch = game.Branch?.ToUpperInvariant() ?? "PUBLIC";
-                preprocessorList.Add(EscapeSymbolName(name));
-                preprocessorList.Add(EscapeSymbolName(name + "_" + branch));
+                preprocessors.Add(EscapeSymbolName(name));
+                preprocessors.Add(EscapeSymbolName(name + "_" + branch));
 
                 if (game.Version != default)
                 {
-                    preprocessorList.Add(EscapeSymbolName(name + "_" + game.Version));
-                    preprocessorList.Add(EscapeSymbolName(name + "_" + game.Version + "_" + branch));
+                    preprocessors.Add(EscapeSymbolName(name + "_" + game.Version));
+                    preprocessors.Add(EscapeSymbolName(name + "_" + game.Version + "_" + branch));
                 }
             }
 
@@ -139,39 +138,40 @@ namespace Oxide.CSharp
                     string prefix = $"{extension.Name.ToUpper()}_EXT";
                     foreach (string directive in extension.GetPreprocessorDirectives())
                     {
-                        if (!extension.IsGameExtension && !extension.IsCoreExtension && !directive.StartsWith(prefix))
+                        if (extension is { IsGameExtension: false, IsCoreExtension: false } && !directive.StartsWith(prefix))
                         {
                             Interface.Oxide.LogWarning("Missing extension preprocessor prefix '{0}' for directive '{1}' (by extension '{2}')", prefix, directive, extension.Name);
                         }
 
-                        preprocessorList.Add(EscapeSymbolName(directive));
+                        preprocessors.Add(EscapeSymbolName(directive));
                     }
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    Interface.Oxide.LogException($"An error occurred processing preprocessor directives for extension `{extension.Name}`", ex);
+                    Interface.Oxide.LogException($"An error occurred processing preprocessor directives for extension `{extension.Name}`", exception);
                 }
             }
 
 #if DEBUG
-            preprocessorList.Add("DEBUG");
+            preprocessors.Add("DEBUG");
 #endif
 
-            if (Interface.Oxide.Config.Compiler.PreprocessorDirectives.Count > 0)
+            int preprocessorCount = Interface.Oxide.Config.Compiler.PreprocessorDirectives.Count;
+            for (int i = 0; i < preprocessorCount; i++)
             {
-                preprocessorList.AddRange(Interface.Oxide.Config.Compiler.PreprocessorDirectives);
+                preprocessors.Add(Interface.Oxide.Config.Compiler.PreprocessorDirectives[i]);
             }
 
             if (Interface.Oxide.Config.Compiler.Publicize ?? false)
             {
                 EnvironmentHelper.SetVariable("AllowPublicize", "true", force: true);
-                preprocessorList.Add("OXIDE_PUBLICIZED");
+                preprocessors.Add("OXIDE_PUBLICIZED");
             }
 
-            _preprocessor = preprocessorList.Distinct().ToArray();
+            _preprocessor = preprocessors;
 
 #if DEBUG
-            Log(LogType.Debug, $"Preprocessors are: {string.Join(", ", _preprocessor)}");
+            Log(LogType.Debug, $"Preprocessors are: {_preprocessor.JoinValues(", ")}");
 #endif
 
 // #if !DEBUG
@@ -554,7 +554,6 @@ namespace Oxide.CSharp
             List<CompilerFile> sourceFiles = PoolFactory<List<CompilerFile>>.Shared.Take();
             try
             {
-
                 foreach (CompilablePlugin plugin in compilation.plugins)
                 {
                     string name = Path.GetFileName(plugin.ScriptPath ?? plugin.ScriptName);
