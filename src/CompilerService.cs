@@ -20,6 +20,7 @@ using Oxide.CompilerServices;
 using Oxide.Core.Extensions;
 using Oxide.CSharp.Common;
 using Oxide.CSharp.CompilerStream;
+using Oxide.Pooling;
 
 namespace Oxide.CSharp
 {
@@ -549,76 +550,88 @@ namespace Oxide.CSharp
 
             compilation.Started();
 
-            HashSet<string> includedFiles = new HashSet<string>();
-
-            List<CompilerFile> sourceFiles = new List<CompilerFile>();
-            foreach (CompilablePlugin plugin in compilation.plugins)
+            HashSet<string> includedFiles = PoolFactory<HashSet<string>>.Shared.Take();
+            List<CompilerFile> sourceFiles = PoolFactory<List<CompilerFile>>.Shared.Take();
+            try
             {
-                string name = Path.GetFileName(plugin.ScriptPath ?? plugin.ScriptName);
-                if (plugin.ScriptSource == null || plugin.ScriptSource.Length == 0)
-                {
-                    plugin.CompilerErrors.Add("No data contained in .cs file");
-                    Log(LogType.Error, $"Ignoring plugin {name}, file is empty");
-                    continue;
-                }
 
-                foreach (string include in plugin.IncludePaths)
+                foreach (CompilablePlugin plugin in compilation.plugins)
                 {
-                    if (includedFiles.Contains(include))
+                    string name = Path.GetFileName(plugin.ScriptPath ?? plugin.ScriptName);
+                    byte[]? scriptSource = plugin.ScriptSource;
+                    if (scriptSource == null || scriptSource.Length == 0)
                     {
-                        Interface.Oxide.LogWarning($"Tried to include {include} but it has already been added to the compilation");
+                        plugin.CompilerErrors.Add("No data contained in .cs file");
+                        Log(LogType.Error, $"Ignoring plugin {name}, file is empty");
                         continue;
                     }
 
-                    CompilerFile includeFile = new CompilerFile(include);
-                    if (includeFile.Data == null || includeFile.Data.Length == 0)
+                    foreach (string include in plugin.IncludePaths)
                     {
-                        Interface.Oxide.LogWarning($"Ignoring plugin {includeFile.Name}, file is empty");
-                        continue;
+                        if (includedFiles.Contains(include))
+                        {
+                            Interface.Oxide.LogWarning($"Tried to include {include} but it has already been added to the compilation");
+                            continue;
+                        }
+
+                        CompilerFile includeFile = new(include);
+                        if (includeFile.Data == null || includeFile.Data.Length == 0)
+                        {
+                            Interface.Oxide.LogWarning($"Ignoring plugin {includeFile.Name}, file is empty");
+                            continue;
+                        }
+
+                        Interface.Oxide.LogWarning($"Adding {includeFile.Name} to compilation project");
+
+                        sourceFiles.Add(includeFile);
+                        includedFiles.Add(include);
                     }
 
-                    Interface.Oxide.LogWarning($"Adding {includeFile.Name} to compilation project");
-
-                    sourceFiles.Add(includeFile);
-                    includedFiles.Add(include);
+                    Log(LogType.Info, $"Adding plugin {name} to compilation project");
+                    sourceFiles.Add(new CompilerFile(plugin.ScriptPath ?? plugin.ScriptName, scriptSource));
                 }
 
-                Log(LogType.Info, $"Adding plugin {name} to compilation project");
-                sourceFiles.Add(new CompilerFile(plugin.ScriptPath ?? plugin.ScriptName, plugin.ScriptSource));
+                if (sourceFiles.Count == 0)
+                {
+                    Interface.Oxide.LogError("Compilation job contained no valid plugins");
+                    _compilations.Remove(compilation.id);
+                    compilation.Completed();
+                    return;
+                }
+
+                CompilerData compilerData = new()
+                {
+                    OutputFile = compilation.name,
+                    SourceFiles = sourceFiles,
+                    ReferenceFiles = compilation.references.Values.ToArray(),
+                    Preprocessor = _preprocessor,
+                    Debug = Debugger.IsAttached,
+                };
+
+                CompilerMessage compilerMessage = new()
+                {
+                    Id = compilation.id,
+                    Type = MessageType.Data,
+                    Data = Constants.Serializer.Serialize(compilerData),
+                };
+
+                if (_ready)
+                {
+                    compilation.startedAt = Interface.Oxide.Now;
+                    _messageBrokerService.SendMessage(compilerMessage);
+                }
+                else
+                {
+                    _messageQueue.Enqueue(compilerMessage);
+                }
             }
+            finally
+            {
+                includedFiles.Clear();
+                sourceFiles.Clear();
 
-            if (sourceFiles.Count == 0)
-            {
-                Interface.Oxide.LogError("Compilation job contained no valid plugins");
-                _compilations.Remove(compilation.id);
-                compilation.Completed();
-                return;
-            }
-
-            CompilerData compilerData = new CompilerData
-            {
-                OutputFile = compilation.name,
-                SourceFiles = sourceFiles,
-                ReferenceFiles = compilation.references.Values.ToArray(),
-                Preprocessor = _preprocessor,
-                Debug = Debugger.IsAttached,
-            };
-
-            CompilerMessage compilerMessage = new CompilerMessage
-            {
-                Id = compilation.id,
-                Type = MessageType.Data,
-                Data = Constants.Serializer.Serialize(compilerData),
-            };
-
-            if (_ready)
-            {
-                compilation.startedAt = Interface.Oxide.Now;
-                _messageBrokerService.SendMessage(compilerMessage);
-            }
-            else
-            {
-                _messageQueue.Enqueue(compilerMessage);
+                PoolFactory<HashSet<string>>.Shared.Return(includedFiles);
+                PoolFactory<List<CompilerFile>>.Shared.Return(sourceFiles);
             }
         }
 

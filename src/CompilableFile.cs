@@ -37,7 +37,7 @@ namespace Oxide.Plugins
 
         private Core.Libraries.Timer.TimerInstance timeoutTimer;
 
-        public byte[] ScriptSource => ScriptEncoding.GetBytes(string.Join(Environment.NewLine, ScriptLines));
+        public byte[]? ScriptSource => ScriptEncoding.GetBytes(ScriptLines.JoinValues(Environment.NewLine));
 
         public CompilableFile(CSharpExtension extension, CSharpPluginLoader loader, string directory, string name)
         {
