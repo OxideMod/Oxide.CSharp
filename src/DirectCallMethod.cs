@@ -1,8 +1,10 @@
 extern alias References;
-using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Oxide.Core.Plugins;
+using Oxide.CSharp.Common;
+using Oxide.Pooling;
 using References::Mono.Cecil;
 using References::Mono.Cecil.Cil;
 using References::Mono.Cecil.Rocks;
@@ -11,59 +13,56 @@ namespace Oxide.Core.CSharp
 {
     public class DirectCallMethod
     {
-        public class Node
-        {
-            public char Char;
-            public string Name;
-            public Dictionary<char, Node> Edges = new Dictionary<char, Node>();
-            public Node Parent;
-            public Instruction FirstInstruction;
-        }
-
-        private ModuleDefinition module;
-        private TypeDefinition type;
-        private MethodDefinition method;
-        private MethodBody body;
-        private Instruction endInstruction;
-
-        private Dictionary<Instruction, Node> jumpToEdgePlaceholderTargets = new Dictionary<Instruction, Node>();
-        private List<Instruction> jumpToEndPlaceholders = new List<Instruction>();
-
-        private Dictionary<string, MethodDefinition> hookMethods = new Dictionary<string, MethodDefinition>();
-
-        private MethodReference getLength;
-        private MethodReference getChars;
-        private MethodReference isNullOrEmpty;
-        private MethodReference stringEquals;
-
-        private string hook_attribute = typeof(HookMethodAttribute).FullName;
+        private readonly ModuleDefinition _module;
+        private readonly TypeDefinition _type;
+        private readonly MethodDefinition _method;
+        private readonly MethodBody _body;
+        private readonly Instruction _endInstruction;
+        private readonly MethodReference _getLength;
+        private readonly MethodReference _getChars;
+        private readonly MethodReference _isNullOrEmpty;
+        private readonly MethodReference _stringEquals;
+        private readonly string _hookAttribute;
+        private readonly Dictionary<Instruction, Node> _jumpToEdgePlaceholderTargets = new();
+        private readonly List<Instruction> _jumpToEndPlaceholders = new();
+        private readonly Dictionary<string, MethodDefinition> _hookMethods = new();
 
         public DirectCallMethod(ModuleDefinition module, TypeDefinition type, AssemblyDefinition baseAssembly)
         {
-            this.module = module;
-            this.type = type;
+            _module = module;
+            _type = type;
 
-            getLength = module.ImportReference(typeof(string).GetMethod("get_Length", new Type[0]));
-            getChars = module.ImportReference(typeof(string).GetMethod("get_Chars", new[] { typeof(int) }));
-            isNullOrEmpty = module.ImportReference(typeof(string).GetMethod("IsNullOrEmpty", new[] { typeof(string) }));
-            stringEquals = module.ImportReference(typeof(string).GetMethod("Equals", new[] { typeof(string) }));
+            _getLength = module.ImportReference(typeof(string).GetMethod("get_Length",
+                Constants.StringGetLengthTypeArray));
+
+            _getChars = module.ImportReference(typeof(string).GetMethod("get_Chars",
+                Constants.StringGetCharsTypeArray));
+
+            _isNullOrEmpty = module.ImportReference(typeof(string).GetMethod("IsNullOrEmpty",
+                Constants.StringIsNullOrEmptyTypeArray));
+
+            _stringEquals = module.ImportReference(typeof(string).GetMethod("Equals",
+                Constants.StringEqualsTypeArray));
+
+            _hookAttribute = typeof(HookMethodAttribute).FullName;
 
             // Copy method definition from base class
-
-            ModuleDefinition base_module = baseAssembly.MainModule;
-            TypeDefinition base_type = module.ImportReference(baseAssembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
-            MethodDefinition base_method = module.ImportReference(base_type.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
+            ModuleDefinition baseModule = baseAssembly.MainModule;
+            TypeDefinition baseType = module.ImportReference(baseAssembly.MainModule.GetType("Oxide.Plugins.CSharpPlugin")).Resolve();
+            MethodDefinition baseMethod = module.ImportReference(baseType.Methods.First(method => method.Name == "DirectCallHook")).Resolve();
 
             // Create method override based on virtual method signature
-            method = new MethodDefinition(base_method.Name, base_method.Attributes,
-                base_module.ImportReference(base_method.ReturnType))
+            _method = new MethodDefinition(baseMethod.Name, baseMethod.Attributes,
+                baseModule.ImportReference(baseMethod.ReturnType))
             {
                 DeclaringType = type
             };
 
-            foreach (ParameterDefinition parameter in base_method.Parameters)
+            int methodParameterCount = baseMethod.Parameters.Count;
+            for (int i = 0; i < methodParameterCount; i++)
             {
-                ParameterDefinition new_param = new(parameter.Name, parameter.Attributes,
+                ParameterDefinition parameter = baseMethod.Parameters[i];
+                ParameterDefinition newParam = new(parameter.Name, parameter.Attributes,
                     module.ImportReference(parameter.ParameterType))
                 {
                     IsOut = parameter.IsOut,
@@ -72,35 +71,39 @@ namespace Oxide.Core.CSharp
                     IsReturnValue = parameter.IsReturnValue
                 };
 
-                foreach (CustomAttribute attribute in parameter.CustomAttributes)
+                int parameterCustomAttributeCount = parameter.CustomAttributes.Count;
+                for (int j = 0; j < parameterCustomAttributeCount; j++)
                 {
-                    new_param.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
+                    CustomAttribute attribute = parameter.CustomAttributes[j];
+                    newParam.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
                 }
 
-                method.Parameters.Add(new_param);
+                _method.Parameters.Add(newParam);
             }
 
-            foreach (CustomAttribute attribute in base_method.CustomAttributes)
+            int methodCustomAttributeCount = baseMethod.CustomAttributes.Count;
+            for (int i = 0; i < methodCustomAttributeCount; i++)
             {
-                method.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
+                CustomAttribute attribute = baseMethod.CustomAttributes[i];
+                _method.CustomAttributes.Add(new CustomAttribute(module.ImportReference(attribute.Constructor)));
             }
 
-            method.ImplAttributes = base_method.ImplAttributes;
-            method.SemanticsAttributes = base_method.SemanticsAttributes;
+            _method.ImplAttributes = baseMethod.ImplAttributes;
+            _method.SemanticsAttributes = baseMethod.SemanticsAttributes;
 
             // Replace the NewSlot attribute with ReuseSlot
-            method.Attributes &= ~MethodAttributes.NewSlot;
-            method.Attributes |= MethodAttributes.ReuseSlot;
+            _method.Attributes &= ~MethodAttributes.NewSlot;
+            _method.Attributes |= MethodAttributes.ReuseSlot;
 
             // Create new method body
-            body = new MethodBody(method);
-            body.SimplifyMacros();
-            method.Body = body;
-            type.Methods.Add(method);
+            _body = new MethodBody(_method);
+            _body.SimplifyMacros();
+            _method.Body = _body;
+            type.Methods.Add(_method);
 
             // Create variables
-            body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
-            body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+            _body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+            _body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
 
             // Initialize return value to null
             AddInstruction(OpCodes.Ldarg_2);
@@ -109,13 +112,13 @@ namespace Oxide.Core.CSharp
 
             // Check for name null or empty
             AddInstruction(OpCodes.Ldarg_1);
-            AddInstruction(OpCodes.Call, isNullOrEmpty);
-            Instruction empty = AddInstruction(OpCodes.Brfalse, body.Instructions[0]);
+            AddInstruction(OpCodes.Call, _isNullOrEmpty);
+            Instruction empty = AddInstruction(OpCodes.Brfalse, _body.Instructions[0]);
             Return(false);
 
             // Get method name length
             empty.Operand = AddInstruction(OpCodes.Ldarg_1);
-            AddInstruction(OpCodes.Callvirt, getLength);
+            AddInstruction(OpCodes.Callvirt, _getLength);
             AddInstruction(OpCodes.Stloc_0);
 
             // Initialize i counter variable to 0
@@ -123,96 +126,152 @@ namespace Oxide.Core.CSharp
             AddInstruction(OpCodes.Stloc_1);
 
             // Find all hook methods defined by the plugin
-            foreach (MethodDefinition m in type.Methods.Where(m => !m.IsStatic && (m.IsPrivate ||
-                         IsHookMethod(m)) && !m.HasGenericParameters && !m.ReturnType.IsGenericParameter && m.DeclaringType == type && !m.IsSetter && !m.IsGetter))
+            int methodCount = type.Methods.Count;
+            for (int i = 0; i < methodCount; i++)
             {
-                //ignore compiler generated
-                if (m.Name.Contains("<"))
+                MethodDefinition method = type.Methods[i];
+                if (method.IsStatic || method.DeclaringType != type || method.IsGetter || method.IsSetter)
                 {
                     continue;
                 }
 
-                string name = m.Name;
-                if (m.Parameters.Count > 0)
+                if (!method.IsPrivate && !IsHookMethod(method))
                 {
-                    name += $"({string.Join(", ", m.Parameters.Select(x => x.ParameterType.ToString().Replace("/", "+").Replace("<", "[").Replace(">", "]")).ToArray())})";
+                    continue;
                 }
 
-                if (!hookMethods.ContainsKey(name))
+                if (method.HasGenericParameters || method.ReturnType.IsGenericParameter)
                 {
-                    hookMethods[name] = m;
+                    continue;
                 }
+
+                // Ignore compiler-generated
+                if (method.Name.IndexOf('<') >= 0)
+                {
+                    continue;
+                }
+
+                string name;
+                int parameterCount = method.Parameters.Count;
+                if (parameterCount == 0)
+                {
+                    name = method.Name;
+                }
+                else
+                {
+                    StringBuilder stringBuilder = PoolFactory<StringBuilder>.Shared.Take();
+                    try
+                    {
+                        stringBuilder.Append(method.Name);
+                        stringBuilder.Append('(');
+
+                        for (int j = 0; j < parameterCount; j++)
+                        {
+                            if (j > 0)
+                            {
+                                stringBuilder.Append(',');
+                                stringBuilder.Append(' ');
+                            }
+
+                            AppendFormattedTypeName(stringBuilder, method.Parameters[j].ParameterType);
+                        }
+
+                        stringBuilder.Append(')');
+                        name = stringBuilder.ToString();
+                    }
+                    finally
+                    {
+                        stringBuilder.Length = 0;
+                        PoolFactory<StringBuilder>.Shared.Return(stringBuilder);
+                    }
+                }
+
+                _hookMethods[name] = method;
             }
 
             // Build a hook method name trie
-            Node root_node = new Node();
-            foreach (string method_name in hookMethods.Keys)
+            Node rootNode = new();
+            foreach (string methodName in _hookMethods.Keys)
             {
-                Node current_node = root_node;
-                for (int i = 1; i <= method_name.Length; i++)
+                Node currentNode = rootNode;
+                int methodNameLength = methodName.Length;
+                for (int i = 1; i <= methodNameLength; i++)
                 {
-                    char letter = method_name[i - 1];
-                    if (!current_node.Edges.TryGetValue(letter, out Node next_node))
+                    char letter = methodName[i - 1];
+                    if (!currentNode.Edges.TryGetValue(letter, out Node nextNode))
                     {
-                        next_node = new Node { Parent = current_node, Char = letter };
-                        current_node.Edges[letter] = next_node;
-                    }
-                    if (i == method_name.Length)
-                    {
-                        next_node.Name = method_name;
+                        nextNode = new Node
+                        {
+                            Parent = currentNode,
+                            Char = letter
+                        };
+
+                        currentNode.Edges[letter] = nextNode;
                     }
 
-                    current_node = next_node;
+                    if (i == methodNameLength)
+                    {
+                        nextNode.Name = methodName;
+                    }
+
+                    currentNode = nextNode;
                 }
             }
 
             // Build conditional method call logic from trie nodes
             int n = 1;
-            foreach (char edge in root_node.Edges.Keys)
+            foreach (char edge in rootNode.Edges.Keys)
             {
-                BuildNode(root_node.Edges[edge], n++);
+                BuildNode(rootNode.Edges[edge], n++);
             }
 
             // No valid method was found
-            endInstruction = Return(false);
+            _endInstruction = Return(false);
 
-            foreach (Instruction instruction in jumpToEdgePlaceholderTargets.Keys)
+            foreach (Instruction instruction in _jumpToEdgePlaceholderTargets.Keys)
             {
-                instruction.Operand = jumpToEdgePlaceholderTargets[instruction].FirstInstruction;
+                instruction.Operand = _jumpToEdgePlaceholderTargets[instruction].FirstInstruction;
             }
 
-            foreach (Instruction instruction in jumpToEndPlaceholders)
+            int placeholderCount = _jumpToEndPlaceholders.Count;
+            for (int i = 0; i < placeholderCount; i++)
             {
-                instruction.Operand = endInstruction;
+                Instruction instruction = _jumpToEndPlaceholders[i];
+                instruction.Operand = _endInstruction;
             }
 
-            body.OptimizeMacros();
+            _body.OptimizeMacros();
         }
 
         private bool IsHookMethod(MethodDefinition method)
         {
-            foreach (CustomAttribute attribute in method.CustomAttributes)
+            int customAttributeCount = method.CustomAttributes.Count;
+            for (int i = 0; i < customAttributeCount; i++)
             {
-                if (attribute.AttributeType.FullName == hook_attribute)
+                CustomAttribute attribute = method.CustomAttributes[i];
+                if (attribute.AttributeType.FullName != _hookAttribute)
                 {
-                    return true;
+                    continue;
                 }
+
+                return true;
             }
+
             return false;
         }
 
-        private void BuildNode(Node node, int edge_number)
+        private void BuildNode(Node node, int edgeNumber)
         {
             // Check the char index lower than length on first edge
-            if (edge_number == 1)
+            if (edgeNumber == 1)
             {
                 node.FirstInstruction = AddInstruction(OpCodes.Ldloc_1);
                 AddInstruction(OpCodes.Ldloc_0);
-                jumpToEndPlaceholders.Add(AddInstruction(OpCodes.Bge, body.Instructions[0]));
+                _jumpToEndPlaceholders.Add(AddInstruction(OpCodes.Bge, _body.Instructions[0]));
             }
 
             // Check the char at the current position
-            if (edge_number == 1)
+            if (edgeNumber == 1)
             {
                 AddInstruction(OpCodes.Ldarg_1); //method_name
             }
@@ -222,13 +281,13 @@ namespace Oxide.Core.CSharp
             }
 
             AddInstruction(OpCodes.Ldloc_1);                            // i
-            AddInstruction(OpCodes.Callvirt, getChars);                 // method_name[i]
+            AddInstruction(OpCodes.Callvirt, _getChars);                 // method_name[i]
             AddInstruction(Ldc_I4_n(node.Char));
 
-            if (node.Parent.Edges.Count > edge_number)
+            if (node.Parent.Edges.Count > edgeNumber)
             {
                 // If char does not match and there are more edges to check
-                JumpToEdge(node.Parent.Edges.Values.ElementAt(edge_number));
+                JumpToEdge(node.Parent.Edges.Values.ElementAt(edgeNumber));
             }
             else
             {
@@ -238,23 +297,23 @@ namespace Oxide.Core.CSharp
 
             if (node.Edges.Count == 1 && node.Name == null)
             {
-                Node last_edge = node;
-                while (last_edge.Edges.Count == 1 && last_edge.Name == null)
+                Node lastEdge = node;
+                while (lastEdge.Edges.Count == 1 && lastEdge.Name == null)
                 {
-                    last_edge = last_edge.Edges.Values.First();
+                    lastEdge = lastEdge.Edges.Values.First();
                 }
 
-                if (last_edge.Edges.Count == 0 && last_edge.Name != null)
+                if (lastEdge.Edges.Count == 0 && lastEdge.Name != null)
                 {
                     // There is only one remaining possible hook on this path
                     AddInstruction(OpCodes.Ldarg_1);
-                    AddInstruction(Instruction.Create(OpCodes.Ldstr, last_edge.Name));
-                    AddInstruction(OpCodes.Callvirt, stringEquals);
+                    AddInstruction(Instruction.Create(OpCodes.Ldstr, lastEdge.Name));
+                    AddInstruction(OpCodes.Callvirt, _stringEquals);
                     // If the full method name does not match the only remaining possible hook, return false
-                    jumpToEndPlaceholders.Add(AddInstruction(OpCodes.Brfalse, body.Instructions[0]));
+                    _jumpToEndPlaceholders.Add(AddInstruction(OpCodes.Brfalse, _body.Instructions[0]));
 
                     // Method has been found
-                    CallMethod(hookMethods[last_edge.Name]);
+                    CallMethod(_hookMethods[lastEdge.Name]);
                     Return(true);
 
                     return;
@@ -283,7 +342,7 @@ namespace Oxide.Core.CSharp
                 }
 
                 // Method has been found
-                CallMethod(hookMethods[node.Name]);
+                CallMethod(_hookMethods[node.Name]);
                 Return(true);
             }
 
@@ -296,22 +355,24 @@ namespace Oxide.Core.CSharp
 
         private void CallMethod(MethodDefinition method)
         {
-            Dictionary<ParameterDefinition, VariableDefinition> paramDict = new Dictionary<ParameterDefinition, VariableDefinition>();
-            //check for ref/out param
-            for (int i = 0; i < method.Parameters.Count; i++)
+            Dictionary<ParameterDefinition, VariableDefinition> paramDict = new();
+            // check for ref/out param
+            int methodParameterCount = method.Parameters.Count;
+            for (int i = 0; i < methodParameterCount; i++)
             {
                 ParameterDefinition parameter = method.Parameters[i];
-                ByReferenceType param = parameter.ParameterType as ByReferenceType;
-                if (param != null)
+                if (parameter.ParameterType is not ByReferenceType byReferenceType)
                 {
-                    VariableDefinition refParam = AddVariable(module.ImportReference(param.ElementType));
-                    AddInstruction(OpCodes.Ldarg_3);    // object[] params
-                    AddInstruction(Ldc_I4_n(i));        // param_number
-                    AddInstruction(OpCodes.Ldelem_Ref);
-                    AddInstruction(OpCodes.Unbox_Any, module.ImportReference(param.ElementType));
-                    AddInstruction(OpCodes.Stloc_S, refParam);
-                    paramDict[parameter] = refParam;
+                    continue;
                 }
+
+                VariableDefinition refParam = AddVariable(_module.ImportReference(byReferenceType.ElementType));
+                AddInstruction(OpCodes.Ldarg_3);    // object[] params
+                AddInstruction(Ldc_I4_n(i));        // param_number
+                AddInstruction(OpCodes.Ldelem_Ref);
+                AddInstruction(OpCodes.Unbox_Any, _module.ImportReference(byReferenceType.ElementType));
+                AddInstruction(OpCodes.Stloc_S, refParam);
+                paramDict[parameter] = refParam;
             }
 
             if (method.ReturnType.Name != "Void")
@@ -323,46 +384,48 @@ namespace Oxide.Core.CSharp
             for (int i = 0; i < method.Parameters.Count; i++)
             {
                 ParameterDefinition parameter = method.Parameters[i];
-                ByReferenceType param = parameter.ParameterType as ByReferenceType;
-                if (param != null)
+                if (parameter.ParameterType is ByReferenceType)
                 {
                     AddInstruction(OpCodes.Ldloca, paramDict[parameter]);
+                    continue;
                 }
-                else
-                {
-                    // TODO: Handle params array?
-                    AddInstruction(OpCodes.Ldarg_3);    // object[] params
-                    AddInstruction(Ldc_I4_n(i));        // param_number
-                    AddInstruction(OpCodes.Ldelem_Ref);
-                    AddInstruction(OpCodes.Unbox_Any, module.ImportReference(parameter.ParameterType));
-                }
-            }
-            AddInstruction(OpCodes.Call, module.ImportReference(method));
 
-            //handle ref/out params
+                // TODO: Handle params array?
+                AddInstruction(OpCodes.Ldarg_3);    // object[] params
+                AddInstruction(Ldc_I4_n(i));        // param_number
+                AddInstruction(OpCodes.Ldelem_Ref);
+                AddInstruction(OpCodes.Unbox_Any, _module.ImportReference(parameter.ParameterType));
+            }
+
+            AddInstruction(OpCodes.Call, _module.ImportReference(method));
+
+            // handle ref/out params
             for (int i = 0; i < method.Parameters.Count; i++)
             {
                 ParameterDefinition parameter = method.Parameters[i];
-                ByReferenceType param = parameter.ParameterType as ByReferenceType;
-                if (param != null)
+                if (parameter.ParameterType is not ByReferenceType byReferenceType)
                 {
-                    AddInstruction(OpCodes.Ldarg_3);    // object[] params
-                    AddInstruction(Ldc_I4_n(i));        // param_number
-                    AddInstruction(OpCodes.Ldloc_S, paramDict[parameter]);
-                    AddInstruction(OpCodes.Box, module.ImportReference(param.ElementType));
-                    AddInstruction(OpCodes.Stelem_Ref);
+                    continue;
                 }
+
+                AddInstruction(OpCodes.Ldarg_3);    // object[] params
+                AddInstruction(Ldc_I4_n(i));        // param_number
+                AddInstruction(OpCodes.Ldloc_S, paramDict[parameter]);
+                AddInstruction(OpCodes.Box, _module.ImportReference(byReferenceType.ElementType));
+                AddInstruction(OpCodes.Stelem_Ref);
             }
 
-            if (method.ReturnType.Name != "Void")
+            if (method.ReturnType.Name == "Void")
             {
-                if (method.ReturnType.Name != "Object")
-                {
-                    AddInstruction(OpCodes.Box, module.ImportReference(method.ReturnType));
-                }
-
-                AddInstruction(OpCodes.Stind_Ref);
+                return;
             }
+
+            if (method.ReturnType.Name != "Object")
+            {
+                AddInstruction(OpCodes.Box, _module.ImportReference(method.ReturnType));
+            }
+
+            AddInstruction(OpCodes.Stind_Ref);
         }
 
         private Instruction Return(bool value)
@@ -374,106 +437,96 @@ namespace Oxide.Core.CSharp
 
         private void JumpToEdge(Node node)
         {
-            Instruction instruction = AddInstruction(OpCodes.Bne_Un, body.Instructions[1]);
-            jumpToEdgePlaceholderTargets[instruction] = node;
+            Instruction instruction = AddInstruction(OpCodes.Bne_Un, _body.Instructions[1]);
+            _jumpToEdgePlaceholderTargets[instruction] = node;
         }
 
-        private void JumpToEnd()
-        {
-            jumpToEndPlaceholders.Add(AddInstruction(OpCodes.Bne_Un, body.Instructions[0]));
-        }
+        private void JumpToEnd() => _jumpToEndPlaceholders.Add(AddInstruction(OpCodes.Bne_Un, _body.Instructions[0]));
 
-        private Instruction AddInstruction(OpCode opcode)
-        {
-            return AddInstruction(Instruction.Create(opcode));
-        }
+        private Instruction AddInstruction(OpCode opCode) => AddInstruction(Instruction.Create(opCode));
 
-        private Instruction AddInstruction(OpCode opcode, Instruction instruction)
-        {
-            return AddInstruction(Instruction.Create(opcode, instruction));
-        }
+        private Instruction AddInstruction(OpCode opCode, Instruction instruction) =>
+            AddInstruction(Instruction.Create(opCode, instruction));
 
-        private Instruction AddInstruction(OpCode opcode, MethodReference method_reference)
-        {
-            return AddInstruction(Instruction.Create(opcode, method_reference));
-        }
+        private Instruction AddInstruction(OpCode opCode, MethodReference methodReference) =>
+            AddInstruction(Instruction.Create(opCode, methodReference));
 
-        private Instruction AddInstruction(OpCode opcode, TypeReference type_reference)
-        {
-            return AddInstruction(Instruction.Create(opcode, type_reference));
-        }
+        private Instruction AddInstruction(OpCode opCode, TypeReference typeReference) =>
+            AddInstruction(Instruction.Create(opCode, typeReference));
 
-        private Instruction AddInstruction(OpCode opcode, int value)
-        {
-            return AddInstruction(Instruction.Create(opcode, value));
-        }
+        private Instruction AddInstruction(OpCode opCode, int value) =>
+            AddInstruction(Instruction.Create(opCode, value));
 
-        private Instruction AddInstruction(OpCode opcode, VariableDefinition value)
-        {
-            return AddInstruction(Instruction.Create(opcode, value));
-        }
+        private Instruction AddInstruction(OpCode opCode, VariableDefinition value) =>
+            AddInstruction(Instruction.Create(opCode, value));
 
         private Instruction AddInstruction(Instruction instruction)
         {
-            body.Instructions.Add(instruction);
+            _body.Instructions.Add(instruction);
             return instruction;
         }
 
-        public VariableDefinition AddVariable(TypeReference typeReference)
+        private VariableDefinition AddVariable(TypeReference typeReference)
         {
             VariableDefinition variableDefinition = new(typeReference);
-            body.Variables.Add(variableDefinition);
+            _body.Variables.Add(variableDefinition);
             return variableDefinition;
         }
 
-        private Instruction Ldc_I4_n(int n)
+        private Instruction Ldc_I4_n(int value) => value switch
         {
-            if (n == 0)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_0);
-            }
+            0 => Instruction.Create(OpCodes.Ldc_I4_0),
+            1 => Instruction.Create(OpCodes.Ldc_I4_1),
+            2 => Instruction.Create(OpCodes.Ldc_I4_2),
+            3 => Instruction.Create(OpCodes.Ldc_I4_3),
+            4 => Instruction.Create(OpCodes.Ldc_I4_4),
+            5 => Instruction.Create(OpCodes.Ldc_I4_5),
+            6 => Instruction.Create(OpCodes.Ldc_I4_6),
+            7 => Instruction.Create(OpCodes.Ldc_I4_7),
+            8 => Instruction.Create(OpCodes.Ldc_I4_8),
+            _ => Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)value)
+        };
 
-            if (n == 1)
+        private void AppendFormattedTypeName(StringBuilder stringBuilder, TypeReference type)
+        {
+            string fullName = type.FullName;
+            int fullNameLength = fullName.Length;
+            for (int i = 0; i < fullNameLength; i++)
             {
-                return Instruction.Create(OpCodes.Ldc_I4_1);
+                char character = fullName[i];
+                switch (character)
+                {
+                    case '/':
+                    {
+                        stringBuilder.Append('+');
+                        break;
+                    }
+                    case '<':
+                    {
+                        stringBuilder.Append('[');
+                        break;
+                    }
+                    case '>':
+                    {
+                        stringBuilder.Append(']');
+                        break;
+                    }
+                    default:
+                    {
+                        stringBuilder.Append(character);
+                        break;
+                    }
+                }
             }
-
-            if (n == 2)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_2);
-            }
-
-            if (n == 3)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_3);
-            }
-
-            if (n == 4)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_4);
-            }
-
-            if (n == 5)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_5);
-            }
-
-            if (n == 6)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_6);
-            }
-
-            if (n == 7)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_7);
-            }
-
-            if (n == 8)
-            {
-                return Instruction.Create(OpCodes.Ldc_I4_8);
-            }
-
-            return Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)n);
         }
+    }
+
+    public class Node
+    {
+        public char Char;
+        public string Name;
+        public readonly Dictionary<char, Node> Edges = new();
+        public Node Parent;
+        public Instruction FirstInstruction;
     }
 }
