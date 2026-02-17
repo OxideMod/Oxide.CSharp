@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using Oxide.Core;
@@ -42,5 +43,10 @@ namespace Oxide.CSharp.Common
         internal static readonly string IncludePath = Path.Combine(Interface.Oxide.PluginDirectory, "include");
         internal static readonly string CSharpPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll");
         internal static readonly string MscorlibPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "mscorlib.dll");
+
+        internal static readonly Type[] StringGetLengthTypeArray = [];
+        internal static readonly Type[] StringGetCharsTypeArray = [typeof(int)];
+        internal static readonly Type[] StringIsNullOrEmptyTypeArray = [typeof(string)];
+        internal static readonly Type[] StringEqualsTypeArray = [typeof(string)];
     }
 }

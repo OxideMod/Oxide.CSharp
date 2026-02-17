@@ -23,9 +23,9 @@ namespace Oxide.Core.CSharp
         private readonly MethodReference _isNullOrEmpty;
         private readonly MethodReference _stringEquals;
         private readonly string _hookAttribute;
-        private readonly Dictionary<Instruction, Node> _jumpToEdgePlaceholderTargets = new();
-        private readonly List<Instruction> _jumpToEndPlaceholders = new();
-        private readonly Dictionary<string, MethodDefinition> _hookMethods = new();
+        private readonly Dictionary<Instruction, Node> _jumpToEdgePlaceholderTargets;
+        private readonly List<Instruction> _jumpToEndPlaceholders;
+        private readonly Dictionary<string, MethodDefinition> _hookMethods;
 
         public DirectCallMethod(ModuleDefinition module, TypeDefinition type, AssemblyDefinition baseAssembly)
         {
@@ -45,6 +45,10 @@ namespace Oxide.Core.CSharp
                 Constants.StringEqualsTypeArray));
 
             _hookAttribute = typeof(HookMethodAttribute).FullName;
+
+            _jumpToEdgePlaceholderTargets = new Dictionary<Instruction, Node>();
+            _jumpToEndPlaceholders = new List<Instruction>();
+            _hookMethods = new Dictionary<string, MethodDefinition>();
 
             // Copy method definition from base class
             ModuleDefinition baseModule = baseAssembly.MainModule;
