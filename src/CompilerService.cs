@@ -27,7 +27,7 @@ namespace Oxide.CSharp
     internal class CompilerService
     {
         private readonly Hash<int, Compilation> _compilations;
-        private readonly Queue<CompilerMessage> _messageQueue = new Queue<CompilerMessage>();
+        private readonly Queue<CompilerMessage> _messageQueue = new();
         private Process? _compilerProcess;
         private volatile int _lastId;
         private volatile bool _ready;
@@ -116,22 +116,24 @@ namespace Oxide.CSharp
                 "OXIDEMOD"
             };
 
-            Extension? game = Interface.Oxide.GetAllExtensions().SingleOrDefault(e => e.IsGameExtension);
-            if (game != null)
+            IEnumerable<Extension> extensions = Interface.Oxide.GetAllExtensions();
+
+            Extension? gameExtension = extensions.SingleOrDefault(extension => extension.IsGameExtension);
+            if (gameExtension != null)
             {
-                string name = game.Name.ToUpperInvariant();
-                string branch = game.Branch?.ToUpperInvariant() ?? "PUBLIC";
+                string name = gameExtension.Name.ToUpperInvariant();
+                string branch = gameExtension.Branch?.ToUpperInvariant() ?? "PUBLIC";
                 preprocessors.Add(EscapeSymbolName(name));
                 preprocessors.Add(EscapeSymbolName(name + "_" + branch));
 
-                if (game.Version != default)
+                if (gameExtension.Version != default)
                 {
-                    preprocessors.Add(EscapeSymbolName(name + "_" + game.Version));
-                    preprocessors.Add(EscapeSymbolName(name + "_" + game.Version + "_" + branch));
+                    preprocessors.Add(EscapeSymbolName(name + "_" + gameExtension.Version));
+                    preprocessors.Add(EscapeSymbolName(name + "_" + gameExtension.Version + "_" + branch));
                 }
             }
 
-            foreach (Extension extension in Interface.Oxide.GetAllExtensions())
+            foreach (Extension extension in extensions)
             {
                 try
                 {
@@ -212,9 +214,9 @@ namespace Oxide.CSharp
                     Thread.Sleep(100);
                 }
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                Log(LogType.Error, e.Message);
+                Log(LogType.Error, exception.Message);
                 return false;
             }
 
@@ -243,11 +245,11 @@ namespace Oxide.CSharp
                 _compilerProcess.Exited += OnCompilerProcessExited;
                 _compilerProcess.Start();
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 _compilerProcess?.Dispose();
                 _compilerProcess = null;
-                Interface.Oxide.LogException($"Exception while starting compiler", ex);
+                Interface.Oxide.LogException($"Exception while starting compiler", exception);
                 if (_filePath.Contains("'"))
                 {
                     Interface.Oxide.LogError("Server directory path contains an apostrophe, compiler will not work until path is renamed");
@@ -257,15 +259,15 @@ namespace Oxide.CSharp
                     Interface.Oxide.LogError("Compiler may not be set as executable; chmod +x or 0744/0755 required");
                 }
 
-                if (ex.GetBaseException() != ex)
+                Exception baseException = exception.GetBaseException();
+                if (baseException != exception)
                 {
-                    Interface.Oxide.LogException("BaseException: ", ex.GetBaseException());
+                    Interface.Oxide.LogException("BaseException: ", baseException);
                 }
 
-                Win32Exception win32 = ex as Win32Exception;
-                if (win32 != null)
+                if (exception is Win32Exception win32Exception)
                 {
-                    Interface.Oxide.LogError($"Win32 NativeErrorCode: {win32.NativeErrorCode} ErrorCode: {win32.ErrorCode} HelpLink: {win32.HelpLink}");
+                    Interface.Oxide.LogError($"Win32 NativeErrorCode: {win32Exception.NativeErrorCode} ErrorCode: {win32Exception.ErrorCode} HelpLink: {win32Exception.HelpLink}");
                 }
             }
 
@@ -308,8 +310,10 @@ namespace Oxide.CSharp
 
                     if (message.Errors != null)
                     {
-                        foreach (CompilerError error in message.Errors)
+                        int errorCount = message.Errors.Count;
+                        for (int i = 0; i < errorCount; i++)
                         {
+                            CompilerError error = message.Errors[i];
                             Log(LogType.Error, $"Compiler error for compilation {compilation.name}: {error.Message}");
 
                             CompilablePlugin? compilablePlugin =
@@ -317,7 +321,8 @@ namespace Oxide.CSharp
 
                             if (compilablePlugin == null)
                             {
-                                Interface.Oxide.LogError($"Unable to resolve script error to {error.File}: {error.Message}");
+                                Interface.Oxide.LogError(
+                                    $"Unable to resolve script error to {error.File}: {error.Message}");
                                 continue;
                             }
 
@@ -327,9 +332,10 @@ namespace Oxide.CSharp
                             string[] missingRequirementsArray = missingRequirements.ToArray();
                             if (missingRequirementsArray.Length > 0)
                             {
-                                compilablePlugin.CompilerErrors.Add($"Missing dependencies: {string.Join(",", missingRequirementsArray)}");
+                                compilablePlugin.CompilerErrors.Add(
+                                    $"Missing dependencies: {missingRequirementsArray.JoinValues(',')}");
 
-                                Log(LogType.Error, $"[{error.File}] Missing dependencies: {string.Join(",", missingRequirementsArray)}");
+                                Log(LogType.Error, $"[{error.File}] Missing dependencies: {missingRequirementsArray.JoinValues(',')}");
                             }
                             else
                             {
@@ -341,7 +347,7 @@ namespace Oxide.CSharp
                     }
 
                     CompilationResult? compilationResult = Constants.Serializer.Deserialize<CompilationResult>(message.Data);
-                    if (compilationResult.Data == null || compilationResult.Data.Length == 0)
+                    if (compilationResult?.Data == null || compilationResult.Data.Length == 0)
                     {
                         compilation.Completed();
                     }
@@ -368,9 +374,9 @@ namespace Oxide.CSharp
                         return;
                     }
 
-                    foreach (CompilablePlugin p in compilation.plugins)
+                    foreach (CompilablePlugin compilablePlugin in compilation.plugins)
                     {
-                        p.CompilerErrors.Add(errorMessage);
+                        compilablePlugin.CompilerErrors.Add(errorMessage);
                     }
 
                     compilation.Completed();
@@ -380,6 +386,7 @@ namespace Oxide.CSharp
                 {
                     string logMessage =
                         $"Ready signal received from compiler (Startup took: {Math.Round((Interface.Oxide.Now - _startTime) * 1000f)}ms)";
+
                     switch (_messageQueue.Count)
                     {
                         case 0:
@@ -672,9 +679,9 @@ namespace Oxide.CSharp
                     Log(LogType.Info, $"{name} is executable");
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Interface.Oxide.LogException($"Unable to check {name} for executable permission", ex);
+                Interface.Oxide.LogException($"Unable to check {name} for executable permission", exception);
             }
             try
             {
@@ -682,9 +689,9 @@ namespace Oxide.CSharp
                 Interface.Oxide.LogInfo($"File permissions set for {name}");
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                Interface.Oxide.LogException($"Could not set {filePath} as executable, please set manually", ex);
+                Interface.Oxide.LogException($"Could not set {filePath} as executable, please set manually", exception);
             }
 
             return false;
@@ -716,10 +723,7 @@ namespace Oxide.CSharp
                     Interface.Oxide.LogInfo($"[CSharp] Downloading {fileName}. . .");
                 }
 
-                byte[] data;
-                int code;
-                bool newerFound;
-                if (!TryDownload(url, retries, ref retry, last, out data, out code, out newerFound, ref md5))
+                if (!TryDownload(url, retries, ref retry, last, out byte[] data, out int code, out bool newerFound, ref md5))
                 {
                     string attemptVerb = retries == 1 ? "attempt" : "attempts";
                     Interface.Oxide.LogError($"[CSharp] Failed to download {fileName} after {retry} {attemptVerb} with response code '{code}', please manually download it from {url} and save it here {path}");
@@ -750,9 +754,9 @@ namespace Oxide.CSharp
 
                 return true;
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                Interface.Oxide.LogException($"Unexpected error occurred while trying to download {fileName}, please manually download it from {url} and save it here {path}", e);
+                Interface.Oxide.LogException($"Unexpected error occurred while trying to download {fileName}, please manually download it from {url} and save it here {path}", exception);
                 return false;
             }
         }

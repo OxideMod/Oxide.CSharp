@@ -170,6 +170,7 @@ namespace Oxide.Plugins
 
                             Interface.Oxide.RootLogger.WriteDebug(LogType.Info, LogEvent.Compile, "CSharp",
                                 $"Patching DirectCallMethod on {typeDefinition.Name}");
+
                             new DirectCallMethod(assemblyDefinition.MainModule, typeDefinition, baseAssembly);
                         }
                         catch (Exception exception)

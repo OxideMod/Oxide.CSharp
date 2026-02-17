@@ -6,6 +6,7 @@ using Oxide.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Oxide.CSharp.Common;
 using Oxide.Pooling;
@@ -15,13 +16,25 @@ namespace Oxide.Plugins
     public class CSharpPluginLoader : PluginLoader
     {
         public static string[] DefaultReferences = { "mscorlib", "Oxide.Core", "Oxide.CSharp", "Oxide.Common", "System", "System.Core", "System.Data", "System.Xml" };
-        public static HashSet<string> PluginReferences = new HashSet<string>(DefaultReferences);
+        public static HashSet<string> PluginReferences = new(DefaultReferences);
         public static CSharpPluginLoader Instance;
 
         private static CSharpExtension extension;
         private static Dictionary<string, CompilablePlugin> plugins = new Dictionary<string, CompilablePlugin>();
         private static readonly string[] AssemblyBlacklist = { "Newtonsoft.Json", "protobuf-net", "websocket-sharp" };
         private Core.Libraries.Timer timer { get; } = Interface.Oxide.GetLibrary<Core.Libraries.Timer>();
+
+        private readonly List<CompilablePlugin> _compilationQueue = new List<CompilablePlugin>();
+        private readonly CompilerService _compiler;
+
+        public override string FileExtension => ".cs";
+
+        public CSharpPluginLoader(CSharpExtension extension)
+        {
+            Instance = this;
+            CSharpPluginLoader.extension = extension;
+            _compiler = new CompilerService(extension);
+        }
 
         public static CompilablePlugin GetCompilablePlugin(string directory, string name)
         {
@@ -33,18 +46,6 @@ namespace Oxide.Plugins
             }
 
             return plugin;
-        }
-
-        public override string FileExtension => ".cs";
-
-        private readonly List<CompilablePlugin> _compilationQueue = new List<CompilablePlugin>();
-        private readonly CompilerService _compiler;
-
-        public CSharpPluginLoader(CSharpExtension extension)
-        {
-            Instance = this;
-            CSharpPluginLoader.extension = extension;
-            _compiler = new CompilerService(extension);
         }
 
         public void OnModLoaded()
@@ -59,7 +60,7 @@ namespace Oxide.Plugins
                     continue;
                 }
 
-                System.Reflection.Assembly assembly = extension.GetType().Assembly;
+                Assembly assembly = extension.GetType().Assembly;
                 string assemblyName = assembly.GetName().Name;
 
                 if (AssemblyBlacklist.Contains(assemblyName))
@@ -68,12 +69,18 @@ namespace Oxide.Plugins
                 }
 
                 PluginReferences.Add(assemblyName);
-                foreach (System.Reflection.AssemblyName reference in assembly.GetReferencedAssemblies())
+
+                AssemblyName[] referencedAssemblies = assembly.GetReferencedAssemblies();
+                int referencedAssemblyCount = referencedAssemblies.Length;
+                for (int i = 0; i < referencedAssemblyCount; i++)
                 {
-                    if (reference != null)
+                    AssemblyName reference = referencedAssemblies[i];
+                    if (reference == null)
                     {
-                        PluginReferences.Add(reference.Name);
+                        continue;
                     }
+
+                    PluginReferences.Add(reference.Name);
                 }
             }
         }
