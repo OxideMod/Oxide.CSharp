@@ -30,19 +30,19 @@ namespace Oxide.CSharp.Patching
 
         protected override bool OnTypeDefinition(TypeDefinition type)
         {
-            if (type.IsNested && !type.IsNestedPublic)
+            if (type is { IsNested: true, IsNestedPublic: false })
             {
                 type.IsNestedPublic = true;
                 return true;
             }
 
-            if (!type.IsPublic)
+            if (type.IsPublic)
             {
-                type.IsPublic = true;
-                return true;
+                return false;
             }
 
-            return false;
+            type.IsPublic = true;
+            return true;
         }
 
         protected override bool OnFieldDefinition(FieldDefinition field)
@@ -58,9 +58,8 @@ namespace Oxide.CSharp.Patching
 
         protected override bool OnPropertyDefinition(PropertyDefinition property)
         {
-            bool get = property.GetMethod != null ? OnMethodDefinition(property.GetMethod) : false;
-            bool set = property.SetMethod != null ? OnMethodDefinition(property.SetMethod) : false;
-
+            bool get = property.GetMethod != null && OnMethodDefinition(property.GetMethod);
+            bool set = property.SetMethod != null && OnMethodDefinition(property.SetMethod);
             return get || set;
         }
 
@@ -78,26 +77,27 @@ namespace Oxide.CSharp.Patching
         protected override void OnPatchFinished(PatchContext context)
         {
             string writePath = EnvironmentHelper.GetVariable("PublicizerOutput");
-
-            if (!string.IsNullOrEmpty(writePath))
+            if (string.IsNullOrEmpty(writePath))
             {
-                string name = context.Assembly.Name.Name;
-                if (!Directory.Exists(writePath))
-                {
-                    Log($"Failed to write {name} because PublicizeOutput {writePath} doesn't exist", Core.Logging.LogType.Error);
-                    return;
-                }
+                return;
+            }
 
-                try
-                {
-                    name = Path.Combine(writePath, name + ".dll");
-                    context.Assembly.Write(name);
-                    Log($"Wrote publicized assembly to {writePath}");
-                }
-                catch (Exception e)
-                {
-                    Log($"Failed to write publicized assembly to {writePath}", Core.Logging.LogType.Error, e);
-                }
+            string name = context.Assembly.Name.Name;
+            if (!Directory.Exists(writePath))
+            {
+                Log($"Failed to write {name} because PublicizeOutput {writePath} doesn't exist", Core.Logging.LogType.Error);
+                return;
+            }
+
+            try
+            {
+                name = Path.Combine(writePath, $"{name}.dll");
+                context.Assembly.Write(name);
+                Log($"Wrote publicized assembly to {writePath}");
+            }
+            catch (Exception exception)
+            {
+                Log($"Failed to write publicized assembly to {writePath}", Core.Logging.LogType.Error, exception);
             }
         }
     }

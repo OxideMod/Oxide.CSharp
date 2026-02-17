@@ -111,7 +111,7 @@ namespace Oxide.Plugins
                         SymbolReaderProvider = new PortablePdbReaderProvider()
                     };
 
-                    AssemblyDefinition baseAssembly = AssemblyDefinition.ReadAssembly(Constants.CSharpPath,
+                    using AssemblyDefinition baseAssembly = AssemblyDefinition.ReadAssembly(Constants.CSharpPath,
                         new ReaderParameters
                         {
                             AssemblyResolver = assemblyResolver,
@@ -122,7 +122,8 @@ namespace Oxide.Plugins
                     using MemoryStream symbolStream = new(Symbols);
                     readerParameters.SymbolStream = symbolStream;
 
-                    AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(assemblyStream, readerParameters);
+                    using AssemblyDefinition assemblyDefinition =
+                        AssemblyDefinition.ReadAssembly(assemblyStream, readerParameters);
 
                     int foundPlugins = 0;
                     int totalPlugins = CompilablePlugins.Count(p => p.CompilerErrors.Count == 0);

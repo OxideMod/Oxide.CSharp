@@ -21,7 +21,7 @@ namespace Oxide.CSharp.CompilerStream
         internal static readonly Dictionary<string, CompilerFile> FileCache =
             new Dictionary<string, CompilerFile>(StringComparer.InvariantCultureIgnoreCase);
 
-        public static CompilerFile CachedReadFile(string directory, string fileName, byte[] data = null)
+        public static CompilerFile? CachedReadFile(string directory, string fileName, byte[]? data = null)
         {
             string fullPath = Path.Combine(directory, fileName);
 
@@ -34,6 +34,7 @@ namespace Oxide.CSharp.CompilerStream
                     {
                         file.Data = data;
                     }
+
                     file.LastRead = DateTime.Now;
                     return file;
                 }

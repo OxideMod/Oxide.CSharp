@@ -41,5 +41,6 @@ namespace Oxide.CSharp.Common
 
         internal static readonly string IncludePath = Path.Combine(Interface.Oxide.PluginDirectory, "include");
         internal static readonly string CSharpPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "Oxide.CSharp.dll");
+        internal static readonly string MscorlibPath = Path.Combine(Interface.Oxide.ExtensionDirectory, "mscorlib.dll");
     }
 }

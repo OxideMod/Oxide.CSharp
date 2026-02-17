@@ -15,17 +15,17 @@ namespace Oxide.CSharp.Patching
     {
         protected virtual string Name { get; }
 
-        protected IEnumerable<PatchValidationAttribute> TypeValidators { get; }
+        protected List<PatchValidationAttribute> TypeValidators { get; }
 
-        protected IEnumerable<PatchValidationAttribute> PropertyValidators { get; }
+        protected List<PatchValidationAttribute> PropertyValidators { get; }
 
-        protected IEnumerable<PatchValidationAttribute> FieldValidators { get; }
+        protected List<PatchValidationAttribute> FieldValidators { get; }
 
-        protected IEnumerable<PatchValidationAttribute> MethodValidators { get; }
+        protected List<PatchValidationAttribute> MethodValidators { get; }
 
-        protected IEnumerable<PatchValidationAttribute> EventValidators { get; }
+        protected List<PatchValidationAttribute> EventValidators { get; }
 
-        protected IEnumerable<PatchValidationAttribute> MemberValidators { get; }
+        protected List<PatchValidationAttribute> MemberValidators { get; }
 
         protected TraversePatch()
         {
@@ -42,10 +42,10 @@ namespace Oxide.CSharp.Patching
         public void Patch(PatchContext context)
         {
             List<TypeDefinition> types = context.Assembly.MainModule.GetTypes().ToList();
-
-            for (int t = 0; t < types.Count; t++)
+            int typeCount = types.Count;
+            for (int i = 0; i < typeCount; i++)
             {
-                TypeDefinition type = types[t];
+                TypeDefinition type = types[i];
                 RecurseType(type, context);
             }
 
@@ -61,61 +61,70 @@ namespace Oxide.CSharp.Patching
 
             if (type.HasProperties)
             {
-                for (int p = 0; p < type.Properties.Count; p++)
+                int propertyCount = type.Properties.Count;
+                for (int i = 0; i < propertyCount; i++)
                 {
-                    PropertyDefinition prop = type.Properties[p];
-
-                    if (RunValidation(prop, MemberValidators) && OnMemberDefinition(prop))
+                    PropertyDefinition prop = type.Properties[i];
+                    if (!RunValidation(prop, MemberValidators) || !OnMemberDefinition(prop))
                     {
-                        context.IncrementPatches();
+                        continue;
                     }
+
+                    context.IncrementPatches();
                 }
             }
 
             if (type.HasFields)
             {
-                for (int f = 0; f < type.Fields.Count; f++)
+                int fieldCount = type.Fields.Count;
+                for (int i = 0; i < fieldCount; i++)
                 {
-                    FieldDefinition field = type.Fields[f];
-
-                    if (RunValidation(field, MemberValidators) && OnMemberDefinition(field))
+                    FieldDefinition field = type.Fields[i];
+                    if (!RunValidation(field, MemberValidators) || !OnMemberDefinition(field))
                     {
-                        context.IncrementPatches();
+                        continue;
                     }
+
+                    context.IncrementPatches();
                 }
             }
 
             if (type.HasMethods)
             {
-                for (int m = 0; m < type.Methods.Count; m++)
+                int methodCount = type.Methods.Count;
+                for (int i = 0; i < methodCount; i++)
                 {
-                    MethodDefinition method = type.Methods[m];
-
-                    if (RunValidation(method, MemberValidators) && OnMemberDefinition(method))
+                    MethodDefinition method = type.Methods[i];
+                    if (!RunValidation(method, MemberValidators) || !OnMemberDefinition(method))
                     {
-                        context.IncrementPatches();
+                        continue;
                     }
+
+                    context.IncrementPatches();
                 }
             }
 
             if (type.HasEvents)
             {
-                for (int e = 0; e < type.Events.Count; e++)
+                int eventCount = type.Events.Count;
+                for (int i = 0; i < eventCount; i++)
                 {
-                    EventDefinition @event = type.Events[e];
-
-                    if (RunValidation(@event, MemberValidators) && OnMemberDefinition(@event))
+                    EventDefinition eventDefinition = type.Events[i];
+                    if (!RunValidation(eventDefinition, MemberValidators) || !OnMemberDefinition(eventDefinition))
                     {
-                        context.IncrementPatches();
+                        continue;
                     }
+
+                    context.IncrementPatches();
                 }
             }
 
             if (type.HasNestedTypes)
             {
-                for (int t = 0; t < type.NestedTypes.Count; t++)
+                int nestedTypeCount = type.NestedTypes.Count;
+                for (int i = 0; i < nestedTypeCount; i++)
                 {
-                    RecurseType(type.NestedTypes[t], context);
+                    RecurseType(type.NestedTypes[i], context);
                 }
             }
         }
@@ -128,30 +137,15 @@ namespace Oxide.CSharp.Patching
         /// <remarks>Overriding this method will intercept all the calls to the other virtual methods</remarks>
         protected virtual bool OnMemberDefinition(IMemberDefinition member)
         {
-            if (member is TypeDefinition type)
+            return member switch
             {
-                return RunValidation(member, TypeValidators) && OnTypeDefinition(type);
-            }
-            else if (member is PropertyDefinition prop)
-            {
-                return RunValidation(member, PropertyValidators) && OnPropertyDefinition(prop);
-            }
-            else if (member is FieldDefinition field)
-            {
-                return RunValidation(member, FieldValidators) && OnFieldDefinition(field);
-            }
-            else if (member is MethodDefinition method)
-            {
-                return RunValidation(method, MethodValidators) && OnMethodDefinition(method);
-            }
-            else if (member is EventDefinition @event)
-            {
-                return RunValidation(@event, EventValidators) && OnEventDefinition(@event);
-            }
-            else
-            {
-                return false;
-            }
+                TypeDefinition type => RunValidation(member, TypeValidators) && OnTypeDefinition(type),
+                PropertyDefinition prop => RunValidation(member, PropertyValidators) && OnPropertyDefinition(prop),
+                FieldDefinition field => RunValidation(member, FieldValidators) && OnFieldDefinition(field),
+                MethodDefinition method => RunValidation(method, MethodValidators) && OnMethodDefinition(method),
+                EventDefinition @event => RunValidation(@event, EventValidators) && OnEventDefinition(@event),
+                _ => false
+            };
         }
 
         /// <summary>
@@ -196,9 +190,9 @@ namespace Oxide.CSharp.Patching
         /// <summary>
         /// Called when a event is being traversed over
         /// </summary>
-        /// <param name="event">The event</param>
+        /// <param name="eventDefinition">The event</param>
         /// <returns>True if a patch was applied</returns>
-        protected virtual bool OnEventDefinition(EventDefinition @event)
+        protected virtual bool OnEventDefinition(EventDefinition eventDefinition)
         {
             return false;
         }
@@ -207,24 +201,23 @@ namespace Oxide.CSharp.Patching
         {
         }
 
-        protected bool RunValidation(IMemberDefinition member, IEnumerable<PatchValidationAttribute> validations)
+        protected bool RunValidation(IMemberDefinition member, List<PatchValidationAttribute> validations)
         {
-            if (member == null)
+            if (member == null || validations == null)
             {
                 return false;
             }
 
-            if (validations == null)
+            int validationCount = validations.Count;
+            for (int i = 0; i < validationCount; i++)
             {
-                return true;
-            }
-
-            foreach (PatchValidationAttribute valid in validations)
-            {
-                if (!valid.Validate(member))
+                PatchValidationAttribute valid = validations[i];
+                if (valid.Validate(member))
                 {
-                    return false;
+                    continue;
                 }
+
+                return false;
             }
 
             return true;
@@ -235,18 +228,21 @@ namespace Oxide.CSharp.Patching
             Interface.Oxide.RootLogger.WriteDebug(logType, Logging.LogEvent.Patch, Name, message, e);
         }
 
-        private static IEnumerable<PatchValidationAttribute> GetValidationRules(string methodName, Type type)
+        private static List<PatchValidationAttribute> GetValidationRules(string methodName, Type type)
         {
             MethodInfo[] methods = type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Type ret = typeof(bool);
-            for (int i = 0; i < methods.Length; i++)
+
+            int methodCount = methods.Length;
+            for (int i = 0; i < methodCount; i++)
             {
                 MethodInfo method = methods[i];
-
-                if (method.Name.Equals(methodName) && method.ReturnType == ret && method.IsVirtual)
+                if (!method.Name.Equals(methodName) || method.ReturnType != ret || !method.IsVirtual)
                 {
-                    return Patcher.GetValidationRules(method.GetCustomAttributes(true));
+                    continue;
                 }
+
+                return Patcher.GetValidationRules(method.GetCustomAttributes(true));
             }
 
             return null;

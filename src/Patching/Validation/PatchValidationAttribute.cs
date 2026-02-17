@@ -20,15 +20,13 @@ namespace Oxide.CSharp.Patching.Validation
             }
 
             Type type = instance.GetType();
-            PropertyInfo prop = type.GetProperty(name, flags);
-
+            PropertyInfo? prop = type.GetProperty(name, flags);
             if (prop == null)
             {
                 return defaultValue;
             }
 
             object value = prop.GetValue(instance, null);
-
             if (value is T t)
             {
                 return t;

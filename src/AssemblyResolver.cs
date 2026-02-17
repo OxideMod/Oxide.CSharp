@@ -1,6 +1,6 @@
 ﻿extern alias References;
-using System.IO;
 using Oxide.Core;
+using Oxide.CSharp.Common;
 using References::Mono.Cecil;
 
 namespace Oxide.CSharp;
@@ -14,35 +14,35 @@ internal class AssemblyResolver : IAssemblyResolver
     {
         _resolver = new DefaultAssemblyResolver();
         _resolver.AddSearchDirectory(Interface.Oxide.ExtensionDirectory);
-        _mscorlib = AssemblyDefinition.ReadAssembly(Path.Combine(Interface.Oxide.ExtensionDirectory, "mscorlib.dll"));
+        _mscorlib = AssemblyDefinition.ReadAssembly(Constants.MscorlibPath);
     }
 
     public AssemblyDefinition Resolve(AssemblyNameReference assemblyNameReference)
     {
-        if (assemblyNameReference.Name == "System.Private.CoreLib")
+        if (assemblyNameReference.Name != "System.Private.CoreLib")
         {
-            Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Warning,
-                new Logging.LogEvent(50, "Resolve"), "Resolver",
-                "Redirecting reference to System.Private.CoreLib to mscorlib");
-
-            return _mscorlib;
+            return _resolver.Resolve(assemblyNameReference);
         }
 
-        return _resolver.Resolve(assemblyNameReference);
+        Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Warning,
+            new Logging.LogEvent(50, "Resolve"), "Resolver",
+            "Redirecting reference to System.Private.CoreLib to mscorlib");
+
+        return _mscorlib;
     }
 
     public AssemblyDefinition Resolve(AssemblyNameReference assemblyNameReference, ReaderParameters readerParameters)
     {
-        if (assemblyNameReference.Name == "System.Private.CoreLib")
+        if (assemblyNameReference.Name != "System.Private.CoreLib")
         {
-            Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Warning,
-                new Logging.LogEvent(50, "Resolve"), "Resolver",
-                "Redirecting reference to System.Private.CoreLib to mscorlib");
-
-            return _mscorlib;
+            return _resolver.Resolve(assemblyNameReference, readerParameters);
         }
 
-        return _resolver.Resolve(assemblyNameReference, readerParameters);
+        Interface.Oxide.RootLogger.WriteDebug(Core.Logging.LogType.Warning,
+            new Logging.LogEvent(50, "Resolve"), "Resolver",
+            "Redirecting reference to System.Private.CoreLib to mscorlib");
+
+        return _mscorlib;
     }
 
     public void Dispose()

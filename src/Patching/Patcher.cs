@@ -24,19 +24,21 @@ namespace Oxide.CSharp.Patching
             try
             {
                 Type[] types = module.GetTypes();
-
-                for (int i = 0; i < types.Length; i++)
+                int typeCount = types.Length;
+                for (int i = 0; i < typeCount; i++)
                 {
                     Type type = types[i];
 
-                    if (!type.IsAbstract && PatchType.IsAssignableFrom(type))
+                    if (type.IsAbstract || !PatchType.IsAssignableFrom(type))
                     {
-                        List<PatchValidationAttribute> validators = GetValidationRules(type.GetCustomAttributes(PatchValidationType, true)
-                            .Concat(type.Assembly.GetCustomAttributes(PatchValidationType, true)).ToArray());
-
-                        patchTypes.Add(type, validators);
-                        Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher", $"Found {validators.Count} total validators for patch {type.Name}");
+                        continue;
                     }
+
+                    List<PatchValidationAttribute> validators = GetValidationRules(type.GetCustomAttributes(PatchValidationType, true)
+                        .Concat(type.Assembly.GetCustomAttributes(PatchValidationType, true)).ToArray());
+
+                    patchTypes.Add(type, validators);
+                    Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher", $"Found {validators.Count} total validators for patch {type.Name}");
                 }
             }
             catch (Exception e)
@@ -47,7 +49,8 @@ namespace Oxide.CSharp.Patching
 
         private static void GetPatches(Assembly[] modules, ref Dictionary<Type, List<PatchValidationAttribute>> patchTypes)
         {
-            for (int i = 0; i < modules.Length; i++)
+            int moduleCount = modules.Length;
+            for (int i = 0; i < moduleCount; i++)
             {
                 GetPatches(modules[i], ref patchTypes);
             }
@@ -63,23 +66,27 @@ namespace Oxide.CSharp.Patching
             }
 
             PatchContext context = new PatchContext(module);
-            foreach (var kv in Patches)
+            foreach (KeyValuePair<Type, List<PatchValidationAttribute>> kv in Patches)
             {
 
                 Type patchType = kv.Key;
                 List<PatchValidationAttribute> validators = kv.Value;
                 context.PatchValidators = validators;
                 bool failed = false;
-                for (int n = 0; n < validators.Count; n++)
+
+                int validatorCount = validators.Count;
+                for (int i = 0; i < validatorCount; i++)
                 {
-                    PatchValidationAttribute valid = validators[n];
-                    bool pass = valid.Validate(module);
+                    PatchValidationAttribute patchValidationAttribute = validators[i];
+                    bool pass = patchValidationAttribute.Validate(module);
                     // Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher", $"Validation {valid.GetType().Name}: {(pass ? "passed" : "failed")}");
-                    if (!pass)
+                    if (pass)
                     {
-                        failed = true;
-                        break;
+                        continue;
                     }
+
+                    failed = true;
+                    break;
                 }
 
                 if (failed)
@@ -96,10 +103,10 @@ namespace Oxide.CSharp.Patching
                     Interface.Oxide.RootLogger.WriteDebug(LogType.Info, Logging.LogEvent.Patch, "Patcher",
                         $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName}");
                 }
-                catch (Exception e)
+                catch (Exception exception)
                 {
                     Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Patch, "Patcher",
-                        $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName} but threw a error", e);
+                        $"{patchType.Name} has applied {context.ContextPatches} patches to {module.Name?.Name ?? module.FullName} but threw a error", exception);
                 }
             }
 
@@ -110,25 +117,20 @@ namespace Oxide.CSharp.Patching
         {
             try
             {
-                using (MemoryStream inStream = new MemoryStream(data))
+                using MemoryStream inStream = new(data);
+                using AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(inStream);
+
+                if (Run(assembly))
                 {
-                    AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(inStream);
-
-                    if (Run(assembly))
-                    {
-                        using (MemoryStream outStream = new MemoryStream())
-                        {
-                            assembly.Write(outStream);
-                            patched = true;
-                            return outStream.ToArray();
-                        }
-                    }
+                    using MemoryStream outStream = new();
+                    assembly.Write(outStream);
+                    patched = true;
+                    return outStream.ToArray();
                 }
-
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Patch, "Patcher", $"Failed to patch", e);
+                Interface.Oxide.RootLogger.WriteDebug(LogType.Error, Logging.LogEvent.Patch, "Patcher", $"Failed to patch", exception);
             }
 
             patched = false;
@@ -137,15 +139,17 @@ namespace Oxide.CSharp.Patching
 
         public static List<PatchValidationAttribute> GetValidationRules(object[] attributes)
         {
-            List<PatchValidationAttribute> validators = new List<PatchValidationAttribute>();
+            List<PatchValidationAttribute> validators = new();
 
-            for (int i = 0; i < attributes.Length; i++)
+            int attributeCount = attributes.Length;
+            for (int i = 0; i < attributeCount; i++)
             {
-                Attribute a = attributes[i] as Attribute;
-                if (a is PatchValidationAttribute valid)
+                if (attributes[i] is not PatchValidationAttribute patchValidationAttribute)
                 {
-                    validators.Add(valid);
+                    continue;
                 }
+
+                validators.Add(patchValidationAttribute);
             }
 
             return validators;

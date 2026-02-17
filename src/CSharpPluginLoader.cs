@@ -26,11 +26,12 @@ namespace Oxide.Plugins
         public static CompilablePlugin GetCompilablePlugin(string directory, string name)
         {
             string className = Regex.Replace(name, "_", "");
-            if (!plugins.TryGetValue(className, out CompilablePlugin plugin))
+            if (!plugins.TryGetValue(className, out CompilablePlugin? plugin))
             {
                 plugin = new CompilablePlugin(extension, Instance, directory, name);
                 plugins[className] = plugin;
             }
+
             return plugin;
         }
 
@@ -285,10 +286,12 @@ namespace Oxide.Plugins
             foreach (string loadingName in LoadingPlugins.ToArray())
             {
                 CompilablePlugin loadingPlugin = GetCompilablePlugin(plugin.Directory, loadingName);
-                if (loadingPlugin.IsLoading && loadingPlugin.Requires.Contains(plugin.Name))
+                if (!loadingPlugin.IsLoading || !loadingPlugin.Requires.Contains(plugin.Name))
                 {
-                    Load(loadingPlugin);
+                    continue;
                 }
+
+                Load(loadingPlugin);
             }
         }
 
