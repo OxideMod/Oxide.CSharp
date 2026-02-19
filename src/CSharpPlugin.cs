@@ -222,48 +222,58 @@ namespace Oxide.Plugins
             timer = new PluginTimers(this);
 
             Type type = GetType();
-            foreach (MemberInfo member in type.GetMembers(BindingFlags.NonPublic | BindingFlags.Instance))
+            MemberInfo[] members = type.GetMembers(BindingFlags.NonPublic | BindingFlags.Instance);
+            int memberCount = members.Length;
+            for (int i = 0; i < memberCount; i++)
             {
-                if (member.MemberType == MemberTypes.Property || member.MemberType == MemberTypes.Field)
+                MemberInfo member = members[i];
+                switch (member.MemberType)
                 {
-                    if (member.MemberType == MemberTypes.Property)
+                    case MemberTypes.Property or MemberTypes.Field:
                     {
-                        PropertyInfo property = member as PropertyInfo;
-                        if (!property.CanWrite)
+                        if (member.MemberType == MemberTypes.Property)
+                        {
+                            PropertyInfo property = (PropertyInfo)member;
+                            if (!property.CanWrite)
+                            {
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            // FieldInfo field = member as FieldInfo;
+                        }
+
+                        object[] referenceAttributes = member.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
+                        if (referenceAttributes.Length > 0)
+                        {
+                            PluginReferenceAttribute pluginReference = (PluginReferenceAttribute)referenceAttributes[0];
+                            pluginReferenceMembers[pluginReference.Name ?? member.Name] = member;
+                        }
+
+                        break;
+                    }
+                    case MemberTypes.Method:
+                    {
+                        MethodInfo method = (MethodInfo)member;
+                        object[] hookMethodAttributes = method.GetCustomAttributes(typeof(HookMethodAttribute), true);
+                        if (hookMethodAttributes.Length > 0)
                         {
                             continue;
                         }
-                    }
-                    else
-                    {
-                        FieldInfo field = member as FieldInfo;
-                    }
 
-                    object[] reference_attributes = member.GetCustomAttributes(typeof(PluginReferenceAttribute), true);
+                        if (method.Name.Equals("OnFrame"))
+                        {
+                            HookedOnFrame = true;
+                        }
 
-                    if (reference_attributes.Length > 0)
-                    {
-                        PluginReferenceAttribute pluginReference = reference_attributes[0] as PluginReferenceAttribute;
-                        pluginReferenceMembers[pluginReference.Name ?? member.Name] = member;
-                    }
-                }
-                else if (member.MemberType == MemberTypes.Method)
-                {
-                    MethodInfo method = member as MethodInfo;
-                    object[] info_attributes = method.GetCustomAttributes(typeof(HookMethodAttribute), true);
-                    if (info_attributes.Length > 0)
-                    {
-                        continue;
-                    }
+                        // Assume all private instance methods which are not explicitly hooked could be hooks
+                        if (method.DeclaringType.Name == type.Name)
+                        {
+                            AddHookMethod(method.Name, method);
+                        }
 
-                    if (method.Name.Equals("OnFrame"))
-                    {
-                        HookedOnFrame = true;
-                    }
-                    // Assume all private instance methods which are not explicitly hooked could be hooks
-                    if (method.DeclaringType.Name == type.Name)
-                    {
-                        AddHookMethod(method.Name, method);
+                        break;
                     }
                 }
             }
