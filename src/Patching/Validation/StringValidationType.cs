@@ -1,4 +1,4 @@
-﻿namespace Oxide.CSharp.Patching.Validation
+namespace Oxide.CSharp.Patching.Validation
 {
     public enum StringValidationType
     {

@@ -1,7 +1,7 @@
-﻿using Oxide.Core.Logging;
-using Oxide.Logging;
 using System;
 using Oxide.Core;
+using Oxide.Core.Logging;
+using Oxide.Logging;
 
 namespace Oxide
 {
@@ -45,7 +45,7 @@ namespace Oxide
 
         internal static int WriteBigEndian(this int value, byte[] array, int startPos = 0)
         {
-            array[startPos]     = (byte)(value >> 24);
+            array[startPos] = (byte)(value >> 24);
             array[startPos + 1] = (byte)(value >> 16);
             array[startPos + 2] = (byte)(value >> 8);
             array[startPos + 3] = (byte)value;

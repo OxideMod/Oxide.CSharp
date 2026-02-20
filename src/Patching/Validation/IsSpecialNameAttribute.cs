@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 
 using References::Mono.Cecil;
 

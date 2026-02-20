@@ -1,6 +1,6 @@
-﻿using Oxide.Core;
-using Oxide.Core.Plugins;
 using System;
+using Oxide.Core;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {

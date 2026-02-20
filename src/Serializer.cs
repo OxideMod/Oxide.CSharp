@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 using System.IO;
 using Oxide.CSharp.Common;
 using References::Newtonsoft.Json;

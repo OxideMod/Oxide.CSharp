@@ -1,13 +1,12 @@
-﻿extern alias References;
-
-using Oxide.Core;
-using Oxide.Core.Logging;
-using Oxide.CSharp.Patching.Validation;
-using References::Mono.Cecil;
+extern alias References;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Oxide.Core;
+using Oxide.Core.Logging;
+using Oxide.CSharp.Patching.Validation;
+using References::Mono.Cecil;
 
 namespace Oxide.CSharp.Patching
 {

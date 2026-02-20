@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 using Oxide.Core;
 using Oxide.CSharp.Common;
 using References::Mono.Cecil;

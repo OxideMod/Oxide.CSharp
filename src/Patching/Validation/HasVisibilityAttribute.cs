@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 
 using References::Mono.Cecil;
 
@@ -85,7 +85,7 @@ namespace Oxide.CSharp.Patching.Validation
 
                 return field.IsPublic == IsPublic;
             }
-            else if  (item is IMemberDefinition)
+            else if (item is IMemberDefinition)
             {
                 bool? isPub = GetPropertyValue<bool?>(item, "IsPublic");
 

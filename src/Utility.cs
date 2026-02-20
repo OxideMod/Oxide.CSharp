@@ -1,4 +1,4 @@
-﻿extern alias References;
+extern alias References;
 using System;
 using System.Collections;
 using System.Collections.Generic;

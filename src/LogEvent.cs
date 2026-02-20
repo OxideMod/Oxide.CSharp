@@ -1,4 +1,4 @@
-﻿namespace Oxide.Logging
+namespace Oxide.Logging
 {
     /// <summary>
     /// A log event, used to help identify certain logs messages

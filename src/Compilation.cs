@@ -1,7 +1,4 @@
 extern alias References;
-using Oxide.Core;
-using Oxide.Core.Logging;
-using Oxide.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,8 +6,11 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Oxide.Core;
+using Oxide.Core.Logging;
 using Oxide.CSharp.Common;
 using Oxide.CSharp.CompilerStream;
+using Oxide.Logging;
 using Oxide.Pooling;
 using References::Mono.Cecil;
 

@@ -1,10 +1,4 @@
 extern alias References;
-
-using Oxide.Core;
-using Oxide.Core.Logging;
-using Oxide.Logging;
-using Oxide.Plugins;
-using References::Mono.Unix.Native;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,10 +11,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Oxide.CompilerServices;
+using Oxide.Core;
 using Oxide.Core.Extensions;
+using Oxide.Core.Logging;
 using Oxide.CSharp.Common;
 using Oxide.CSharp.CompilerStream;
+using Oxide.Logging;
+using Oxide.Plugins;
 using Oxide.Pooling;
+using References::Mono.Unix.Native;
 
 namespace Oxide.CSharp
 {
