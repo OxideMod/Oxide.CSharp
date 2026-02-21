@@ -20,6 +20,7 @@ using Oxide.Logging;
 using Oxide.Plugins;
 using Oxide.Pooling;
 using References::Mono.Unix.Native;
+using System.Text.Json;
 
 namespace Oxide.CSharp
 {
@@ -343,7 +344,7 @@ namespace Oxide.CSharp
                         }
                     }
 
-                    CompilationResult? compilationResult = Constants.Serializer.Deserialize<CompilationResult>(message.Data);
+                    CompilationResult? compilationResult = JsonSerializer.Deserialize<CompilationResult>(message.Data);
                     if (compilationResult?.Data == null || compilationResult.Data.Length == 0)
                     {
                         compilation.Completed();
@@ -615,7 +616,7 @@ namespace Oxide.CSharp
                 {
                     Id = compilation.id,
                     Type = MessageType.Data,
-                    Data = Constants.Serializer.Serialize(compilerData),
+                    Data = JsonSerializer.SerializeToUtf8Bytes(compilerData),
                 };
 
                 if (_ready)

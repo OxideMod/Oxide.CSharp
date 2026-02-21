@@ -8,6 +8,7 @@ using Oxide.CompilerServices;
 using Oxide.Core;
 using Oxide.CSharp.Common;
 using Oxide.Pooling;
+using System.Text.Json;
 
 namespace Oxide.CSharp.CompilerStream
 {
@@ -96,7 +97,7 @@ namespace Oxide.CSharp.CompilerStream
             using StreamWriter streamWriter = new(memoryStream, Constants.CompilerEncoding, DefaultMaxBufferSize);
             try
             {
-                Constants.Serializer.GetJsonSerializer().Serialize(streamWriter, message);
+                JsonSerializer.Serialize(memoryStream, message);
 
                 streamWriter.Flush();
 
@@ -142,7 +143,7 @@ namespace Oxide.CSharp.CompilerStream
                         read += OnRead(messageBuffer, read, length - read);
                     }
 
-                    return Constants.Serializer.Deserialize<CompilerMessage>(messageBuffer);
+                    return JsonSerializer.Deserialize<CompilerMessage>(messageBuffer);
                 }
                 finally
                 {
