@@ -8,34 +8,19 @@ namespace Oxide.CSharp.Patching.Validation
 {
     public class HasAttributeAttribute : HasNameAttribute
     {
-        public HasAttributeAttribute(string rule, StringValidationType type = StringValidationType.StartsWith, StringComparison comparison = StringComparison.InvariantCultureIgnoreCase) : base(rule, type, comparison)
+        public HasAttributeAttribute(string rule, StringValidationType type = StringValidationType.StartsWith,
+            StringComparison comparison = StringComparison.InvariantCultureIgnoreCase) : base(rule, type, comparison)
         {
         }
 
-        protected override bool IsValid(object item)
+        protected override bool IsValid(object item) => item switch
         {
-            if (item is CustomAttribute attribute)
-            {
-                return base.IsValid(attribute.AttributeType.FullName);
-            }
-            else if (item is Collection<CustomAttribute> attributes)
-            {
-                return attributes.Any(a => base.IsValid(a.AttributeType.FullName));
-            }
-            else if (item is AssemblyDefinition assem && assem.HasCustomAttributes)
-            {
-                return assem.CustomAttributes.Any(a => base.IsValid(a.AttributeType.FullName));
-            }
-            else if (item is ModuleDefinition module && module.HasCustomAttributes)
-            {
-                return module.CustomAttributes.Any(a => base.IsValid(a.AttributeType.FullName));
-            }
-            else if (item is IMemberDefinition member && member.HasCustomAttributes)
-            {
-                return member.CustomAttributes.Any(a => base.IsValid(a.AttributeType.FullName));
-            }
-
-            return false;
-        }
+            CustomAttribute attribute => base.IsValid(attribute.AttributeType.FullName),
+            Collection<CustomAttribute> attributes => attributes.Any(a => base.IsValid(a.AttributeType.FullName)),
+            AssemblyDefinition { HasCustomAttributes: true } assem => assem.CustomAttributes.Any(a => base.IsValid(a.AttributeType.FullName)),
+            ModuleDefinition { HasCustomAttributes: true } module => module.CustomAttributes.Any(a => base.IsValid(a.AttributeType.FullName)),
+            IMemberDefinition { HasCustomAttributes: true } member => member.CustomAttributes.Any(a => base.IsValid(a.AttributeType.FullName)),
+            _ => false
+        };
     }
 }

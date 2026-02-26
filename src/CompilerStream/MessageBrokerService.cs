@@ -1,4 +1,3 @@
-extern alias References;
 using System;
 using System.IO;
 using System.IO.Pipes;

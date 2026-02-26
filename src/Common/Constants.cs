@@ -14,6 +14,7 @@ namespace Oxide.CSharp.Common
         internal const string CompilerBasicArguments = "-unsafe true --setting:Force true -ms true";
         internal const string OxideNamespace = "namespace Oxide.Plugins";
         internal const string UmodNamespace = "namespace uMod.Plugins";
+        internal const string LoggerFormat = "[{0}] {1}";
 
         internal static readonly Regex MainPluginClassNameRegex =
             new Regex(@"^\s*(?:public|private|protected|internal)?\s*class\s+(\S+)\s+\:\s+\S+Plugin\s*$",
