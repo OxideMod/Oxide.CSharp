@@ -20,7 +20,7 @@ using Oxide.Logging;
 using Oxide.Plugins;
 using Oxide.Pooling;
 using References::Mono.Unix.Native;
-using System.Text.Json;
+using References::System.Text.Json;
 
 namespace Oxide.CSharp
 {

@@ -20,8 +20,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Oxide.Common" Version="2.0.47-develop" />
-    <PackageReference Include="Oxide.Core" Version="2.0.4151-develop" />
-    <PackageReference Include="Oxide.References" Version="2.0.3805-develop">
+    <PackageReference Include="Oxide.Core" Version="2.0.4152-develop" />
+    <PackageReference Include="Oxide.References" Version="2.0.3809-develop">
       <PrivateAssets>contentfiles;analyzers;build</PrivateAssets>
     </PackageReference>
     <None Include="..\resources\icon.png" Pack="true" PackagePath="\" />

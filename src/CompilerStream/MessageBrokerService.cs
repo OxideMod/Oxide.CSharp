@@ -1,3 +1,4 @@
+extern alias References;
 using System;
 using System.IO;
 using System.IO.Pipes;
@@ -7,7 +8,7 @@ using Oxide.CompilerServices;
 using Oxide.Core;
 using Oxide.CSharp.Common;
 using Oxide.Pooling;
-using System.Text.Json;
+using References::System.Text.Json;
 
 namespace Oxide.CSharp.CompilerStream
 {

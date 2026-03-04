@@ -1,3 +1,4 @@
+extern alias References;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,13 +6,13 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using Cysharp.Text;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using Oxide.Core.Plugins.Watchers;
 using Oxide.CSharp.Common;
 using Oxide.Logging;
+using References::Cysharp.Text;
 
 namespace Oxide.Plugins
 {
